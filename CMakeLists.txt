@@ -1,0 +1,22 @@
+cmake_minimum_required(VERSION 3.28)
+
+project(cppco)
+
+option(CPPCO_TEST "Build tests" OFF)
+
+add_subdirectory(thirdparty/libco_cmake)
+
+set(CPPCO_HDRS include/co.hpp include/co.ipp)
+add_library(cppco INTERFACE ${CPPCO_HDRS})
+source_group(TREE ${CMAKE_CURRENT_LIST_DIR} PREFIX "Header Files" FILES ${CPPCO_HDRS})
+set_source_files_properties(${CPPCO_HDRS} PROPERTIES HEADER_FILE_ONLY ON)
+target_link_libraries(cppco INTERFACE libco)
+target_include_directories(cppco INTERFACE include)
+set_property(TARGET cppco PROPERTY CXX_STANDARD 17)
+
+if(CPPCO_TEST)
+	add_executable(test_cppco test/main.cpp)
+	target_link_libraries(test_cppco PRIVATE cppco)
+	set_property(TARGET test_cppco PROPERTY CXX_STANDARD 17)
+	set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT test_cppco)
+endif(CPPCO_TEST)
