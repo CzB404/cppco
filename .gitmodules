@@ -1,0 +1,3 @@
+[submodule "thirdparty/libco"]
+	path = thirdparty/libco
+	url = https://github.com/higan-emu/libco.git
