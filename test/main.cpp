@@ -41,7 +41,7 @@ class A : private tracer<A>
 
 int main()
 {
-	auto current = co::thread::current();
+	auto current = co::current_thread();
 	auto cothread = co::thread([current]()
 	{
 		A a;
