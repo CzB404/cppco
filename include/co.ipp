@@ -3,6 +3,7 @@
 
 #include <stdexcept>
 #include <type_traits>
+#include <cassert>
 
 namespace co {
 
@@ -18,14 +19,12 @@ inline cothread_t thread_ref::get_thread() const noexcept
 	return m_thread;
 }
 
-template<typename Entry>
-inline cothread_t thread<Entry>::get_thread() const noexcept
+inline cothread_t detail::thread_owning_impl::get_thread() const noexcept
 {
 	return m_thread.get();
 }
 
-template<typename Entry>
-inline void thread<Entry>::reset() noexcept
+inline void detail::thread_owning_impl::reset() noexcept
 {
 	signal_destruction();
 	m_thread.reset();
@@ -57,25 +56,26 @@ inline thread_ref::thread_ref(cothread_t thread) noexcept
 {
 }
 
+inline detail::thread_owning_impl::operator thread_ref() const noexcept
+{
+	return thread_ref(get_thread());
+}
+
 inline void detail::thread_base::thread_deleter::operator()(cothread_t p) const noexcept
 {
-	if (!p)
-	{
-		return;
-	}
 	co_delete(p);
 }
 
 template<typename Entry>
 inline thread<Entry>::thread() = default;
 
-template<typename Entry>
-inline void thread<Entry>::signal_destruction() const noexcept
+inline void detail::thread_owning_impl::signal_destruction() const noexcept
 {
 	if (!m_thread)
 	{
 		return;
 	}
+	assert(tl_current_thread == nullptr);
 	tl_current_thread = co_active();
 	switch_to();
 }
@@ -86,13 +86,26 @@ inline thread<Entry>::~thread()
 	signal_destruction();
 }
 
+thread_create_failure::thread_create_failure() noexcept
+	: std::runtime_error("Failed to create co::thread")
+{
+}
+
 template<typename Entry>
 inline thread<Entry>::thread(thread<Entry>::entry_t entry, size_t stack_size)
 	: m_entry{ std::move(entry) }
 {
-	tl_current_this = this;
+	assert(tl_current_this == nullptr);
+	assert(tl_current_thread == nullptr);
+	tl_current_this = (detail::thread_base*)this;
 	tl_current_thread = co_active();
 	m_thread.reset(co_create(static_cast<unsigned int>(stack_size), &entry_wrapper));
+	if (m_thread == nullptr)
+	{
+		tl_current_this = nullptr;
+		tl_current_thread = nullptr;
+		throw thread_create_failure();
+	}
 	co_switch(m_thread.get());
 }
 
@@ -102,22 +115,25 @@ inline thread_local cothread_t detail::thread_base::tl_current_thread = nullptr;
 template<typename Entry>
 inline void thread<Entry>::entry_wrapper() noexcept
 {
-	auto* self = static_cast<thread<Entry>*>(std::exchange(tl_current_this, nullptr));
-	auto* creating_thread = std::exchange(tl_current_thread, nullptr);
-	co_switch(creating_thread);
+	assert(tl_current_this != nullptr);
+	assert(tl_current_thread != nullptr);
+	auto* self = (thread<Entry>*)(std::exchange(tl_current_this, nullptr));
+	auto creating_thread = thread_ref(std::exchange(tl_current_thread, nullptr));
 	try
 	{
+		creating_thread.switch_to();
 		(self->m_entry)();
 	}
 	catch (const thread_deletion&)
 	{
+		assert(tl_current_thread != nullptr);
 		auto* deleting_thread = std::exchange(tl_current_thread, nullptr);
 		co_switch(deleting_thread);
 	}
 	catch(...)
 	{
 		self->m_exception = std::current_exception();
-		co_switch(creating_thread);
+		co_switch(creating_thread.m_thread);
 	}
 }
 
