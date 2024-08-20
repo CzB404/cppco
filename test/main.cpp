@@ -1,54 +1,60 @@
+#include "libco_mock.hpp"
 #include <co.hpp>
-#include <cstdio>
+#include <gtest/gtest.h>
+#include <gmock/gmock.h>
 
-template<typename T>
-class tracer
+namespace cppco_test {
+
+using namespace ::testing;
+
+class cppco : public ::testing::Test
 {
+	using Base = ::testing::Test;
 public:
-	tracer() noexcept
+	virtual void SetUp() override
 	{
-		std::printf("%s::%s()\n", T::s_type_name, T::s_type_name);
+		Base::SetUp();
 	}
-	tracer(const tracer&) noexcept
+	virtual void TearDown() override
 	{
-		std::printf("%s::%s(const %s&)\n", T::s_type_name, T::s_type_name, T::s_type_name);
-	}
-	tracer(tracer&&) noexcept
-	{
-		std::printf("%s::%s(const %s&)\n", T::s_type_name, T::s_type_name, T::s_type_name);
-	}
-	tracer& operator=(const tracer&) noexcept
-	{
-		std::printf("%s::operator=(const %s&)\n", T::s_type_name, T::s_type_name);
-		return *this;
-	}
-	tracer& operator=(tracer&&) noexcept
-	{
-		std::printf("%s::operator=(const %s&)\n", T::s_type_name, T::s_type_name);
-		return *this;
-	}
-	~tracer() noexcept
-	{
-		std::printf("%s::~%s()\n", T::s_type_name, T::s_type_name);
+		libco_mock::api::verify();
+		Base::TearDown();
 	}
 };
 
-class A : private tracer<A>
+TEST_F(cppco, main)
 {
-	friend tracer<A>;
-	inline static constexpr const char* s_type_name = "A";
-};
+	bool destructed = false;
 
-int main()
-{
-	auto current = co::current_thread();
-	auto cothread = co::thread([current]()
+	class A
 	{
-		A a;
-		current.switch_to();
-		std::printf("%s\n", "Hello Wolrd!");
-		current.switch_to();
-	});
-	cothread.switch_to();
-	return 0;
+	public:
+		A(bool& destructed)
+			: m_destructed{ &destructed }
+		{
+		}
+		~A()
+		{
+			*m_destructed = true;
+		}
+	private:
+		bool* m_destructed;
+	};
+
+	{
+		EXPECT_CALL(libco_mock::api::get(), active()).Times(3); // current_thread + constructor + destructor
+		EXPECT_CALL(libco_mock::api::get(), create(_, _)).Times(1);
+		EXPECT_CALL(libco_mock::api::get(), switch_to(_)).Times(5); // 2 in main, 2 in constructor, 2 in destructor...?
+		auto current = co::current_thread();
+		auto cothread = co::thread([current, &destructed]()
+			{
+				auto a = A(destructed);
+				current.switch_to();
+			});
+		cothread.switch_to();
+		cothread.reset();
+	}
+	EXPECT_TRUE(destructed);
 }
+
+} // namespace cppco_test

@@ -86,6 +86,7 @@ class thread : private detail::thread_impl<thread<Entry>>
 public:
 	using detail::thread_impl<thread>::operator bool;
 	using detail::thread_impl<thread>::switch_to;
+	void reset() noexcept;
 
 	thread();
 	thread(const thread& other) = delete;
@@ -101,6 +102,7 @@ private:
 	using thread_ptr = std::unique_ptr<void, detail::thread_base::thread_deleter>;
 	cothread_t get_thread() const noexcept;
 	friend cothread_t detail::thread_impl<thread>::get_thread() const noexcept;
+	void signal_destruction() const noexcept;
 	thread_ptr m_thread;
 	entry_t m_entry;
 	std::exception_ptr m_exception;

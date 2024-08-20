@@ -24,6 +24,13 @@ inline cothread_t thread<Entry>::get_thread() const noexcept
 	return m_thread.get();
 }
 
+template<typename Entry>
+inline void thread<Entry>::reset() noexcept
+{
+	signal_destruction();
+	m_thread.reset();
+}
+
 template<typename T>
 inline detail::thread_impl<T>::operator bool() const noexcept
 {
@@ -52,16 +59,31 @@ inline thread_ref::thread_ref(cothread_t thread) noexcept
 
 inline void detail::thread_base::thread_deleter::operator()(cothread_t p) const noexcept
 {
+	if (!p)
+	{
+		return;
+	}
 	co_delete(p);
 }
 
 template<typename Entry>
 inline thread<Entry>::thread() = default;
+
+template<typename Entry>
+inline void thread<Entry>::signal_destruction() const noexcept
+{
+	if (!m_thread)
+	{
+		return;
+	}
+	tl_current_thread = co_active();
+	switch_to();
+}
+
 template<typename Entry>
 inline thread<Entry>::~thread()
 {
-	tl_current_thread = co_active();
-	switch_to();
+	signal_destruction();
 }
 
 template<typename Entry>
