@@ -1,13 +1,26 @@
+# Copyright(C) 2024 by Balazs Cziraki <balazs.cziraki@gmail.com>
+#
+# Permission to use, copy, modify, and /or distribute this software for any
+# purpose with or without fee is hereby granted, provided that the above copyright
+# notice and this permission notice appear in all copies.
+#
+# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+# REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND
+# FITNESS.IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+# INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS
+# OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
+# TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
+# THIS SOFTWARE.
+
 cmake_minimum_required(VERSION 3.8)
 
 project(libco)
 
 option(LIBCO_FORCE_FALLBACK "Force the use of the fallback implementation. (Fibers on Windows, SJLJ otherwise.)" OFF)
-option(LIBCO_MPROTECT "[amd64, arm, ppc, x86]:
-by default, co_swap_function is marked as a text (code) section
-if not supported, uncomment the below line to use mprotect instead" OFF)
-option(LIBCO_NO_SSE "Win64 only: provides a substantial speed-up, but will thrash XMM regs
-do not use this unless you are certain your application won't use SSE" OFF)
+option(LIBCO_MPROTECT "libco uses text sections to mark code as execuable. If this is not supported, set this option to
+ON to use mprotect instead. (Applicable to amd64, arm, ppc, x86)" OFF)
+option(LIBCO_NO_SSE "Win64 only: Provides a substantial speed-up, but will thrash XMM regs
+do not use this unless you are certain your application won't use SSE!" OFF)
 
 set(LIBCO_DIR ${CMAKE_CURRENT_LIST_DIR}/../libco)
 
@@ -55,7 +68,8 @@ if(LIBCO_MPROTECT)
 	target_compile_definitions(libco PRIVATE LIBCO_MPROTECT=)
 else(LIBCO_MPROTECT)
 	if(WIN32)
-		set_source_files_properties(${LIBCO_DIR}/libco.c PROPERTIES COMPILE_FLAGS /FI"${CMAKE_CURRENT_LIST_DIR}/src/msvc_section_fix.ipp")
+		set_source_files_properties(${LIBCO_DIR}/libco.c PROPERTIES COMPILE_FLAGS
+			/FI"${CMAKE_CURRENT_LIST_DIR}/src/msvc_section_fix.ipp")
 	endif(WIN32)
 endif(LIBCO_MPROTECT)
 if(LIBCO_NO_SSE)
