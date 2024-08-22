@@ -36,11 +36,14 @@ protected:
 		ON_CALL(*this, derive(_, _, _)).WillByDefault(Invoke(co_derive));
 		ON_CALL(*this, create(_, _)).WillByDefault(Invoke(co_create));
 		ON_CALL(*this, delete_this(_)).WillByDefault(Invoke(co_delete));
-		ON_CALL(*this, switch_to(_)).WillByDefault(Invoke(co_switch));
+		ON_CALL(*this, switch_to(_)).WillByDefault(Invoke([this](){ m_call_switch = true; })); // We can't directly call `co_switch` because GMock runs extra code in destructors that would not run.
 		ON_CALL(*this, serializable()).WillByDefault(Invoke(co_serializable));
 
 	}
 	~api() = default;
+private:
+	bool m_call_switch = false;
+	friend void switch_to(cothread_t p) noexcept;
 };
 
 inline cothread_t active() noexcept
@@ -61,7 +64,11 @@ inline void delete_this(cothread_t p) noexcept
 }
 inline void switch_to(cothread_t p) noexcept
 {
-	return api::get().switch_to(p);
+	api::get().switch_to(p);
+	if (std::exchange(api::get().m_call_switch, false))
+	{
+		co_switch(p);
+	}
 }
 inline int serializable() noexcept
 {

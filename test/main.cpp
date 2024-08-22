@@ -24,6 +24,7 @@ public:
 
 TEST_F(cppco, create_and_destroy)
 {
+	EXPECT_CALL(libco_mock::api::get(), active()).Times(3); // Default failure cothread is the current cothread. + Constructor needs to initialize entry function and has to call back home. + Destructor kills the entry scope and also has to call back home.
 	EXPECT_CALL(libco_mock::api::get(), create(_, _));
 	EXPECT_CALL(libco_mock::api::get(), switch_to(_)).Times(4); // 2 in constructor, 2 in destructor
 	EXPECT_CALL(libco_mock::api::get(), delete_this(_));
@@ -32,6 +33,7 @@ TEST_F(cppco, create_and_destroy)
 
 TEST_F(cppco, create_and_reset)
 {
+	EXPECT_CALL(libco_mock::api::get(), active()).Times(3);
 	EXPECT_CALL(libco_mock::api::get(), create(_, _));
 	EXPECT_CALL(libco_mock::api::get(), switch_to(_)).Times(4); // 2 in constructor, 2 in reset
 	EXPECT_CALL(libco_mock::api::get(), delete_this(_));
@@ -65,19 +67,63 @@ TEST_F(cppco, destructors)
 	};
 
 	{
-		EXPECT_CALL(libco_mock::api::get(), active()).Times(3); // current_thread + constructor + destructor
+		EXPECT_CALL(libco_mock::api::get(), active()).Times(4); // current_thread + constructor + default failure_thread + destructor
 		EXPECT_CALL(libco_mock::api::get(), create(_, _)).Times(1);
-		EXPECT_CALL(libco_mock::api::get(), switch_to(_)).Times(5); // 2 in main, 2 in constructor, 2 in reset...?
+		EXPECT_CALL(libco_mock::api::get(), switch_to(_)).Times(6); // 2 in main, 2 in constructor, 2 in reset
 		auto current = co::current_thread();
 		auto cothread = co::thread([current, &destructed]()
-			{
-				auto a = A(destructed);
-				current.switch_to();
-			});
+		{
+			auto a = A(destructed);
+			current.switch_to();
+		});
 		cothread.switch_to();
 		cothread.reset();
 	}
 	EXPECT_TRUE(destructed);
+}
+
+TEST_F(cppco, exception)
+{
+	struct Dummy {};
+	auto current = co::current_thread();
+	auto cothread = co::thread([current]()
+	{
+		throw Dummy();
+	});
+	EXPECT_THROW(cothread.switch_to(), Dummy);
+}
+
+TEST_F(cppco, returning_entry)
+{
+	auto cothread = co::thread([]()	{});
+	EXPECT_THROW(cothread.switch_to(), co::thread_return_failure);
+}
+
+TEST_F(cppco, exception_other_cothread)
+{
+	struct Dummy {};
+	auto current = co::current_thread();
+	bool caught = false;
+	auto fail_cothread = co::thread([current, &caught]()
+	{
+		try
+		{
+			current.switch_to();
+		}
+		catch (const Dummy&)
+		{
+			caught = true;
+			current.switch_to();
+		}
+	});
+	fail_cothread.switch_to();
+	auto cothread = co::thread([]()
+	{
+		throw Dummy();
+	},
+		fail_cothread);
+	cothread.switch_to();
+	EXPECT_TRUE(caught);
 }
 
 } // namespace cppco_test

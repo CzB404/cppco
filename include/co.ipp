@@ -40,9 +40,16 @@ template<typename T>
 inline void detail::thread_impl<T>::switch_to() const
 {
 	co_switch(get_thread());
+	// If the current thread variable is set while switch_to is called then it's the destructor that's issuing the call and the entry function stack has to be destroyed. Propagate an exception to achieve that.
 	if (tl_current_thread)
 	{
 		throw thread_deletion();
+	}
+	// If there is an active failure then this is the callback to the failure handling cothread. Rethrow the failure.
+	if (auto failure = std::exchange(tl_current_failure, nullptr))
+	{
+		failure.failing_thread->m_thread.reset(); // The exception killed the cothread's scope.
+		std::rethrow_exception(failure.exception);
 	}
 }
 
@@ -66,9 +73,6 @@ inline void detail::thread_base::thread_deleter::operator()(cothread_t p) const 
 	co_delete(p);
 }
 
-template<typename Entry>
-inline thread<Entry>::thread() = default;
-
 inline void detail::thread_owning_impl::signal_destruction() const noexcept
 {
 	if (!m_thread)
@@ -80,23 +84,33 @@ inline void detail::thread_owning_impl::signal_destruction() const noexcept
 	switch_to();
 }
 
-template<typename Entry>
-inline thread<Entry>::~thread()
+inline thread::~thread()
 {
 	signal_destruction();
 }
 
-thread_create_failure::thread_create_failure() noexcept
+inline thread_create_failure::thread_create_failure() noexcept
 	: std::runtime_error("Failed to create co::thread")
 {
 }
 
-template<typename Entry>
-inline thread<Entry>::thread(thread<Entry>::entry_t entry, size_t stack_size)
-	: m_entry{ std::move(entry) }
+inline thread_return_failure::thread_return_failure() noexcept
+	: std::runtime_error("Return from entry function given to co::thread")
+{
+}
+
+inline detail::thread_owning_impl::thread_owning_impl(thread_ref failure_thread) noexcept
+	: m_failure_thread{ failure_thread }
+{
+}
+
+inline thread::thread(thread::entry_t entry, size_t stack_size, thread_ref failure_thread)
+	: detail::thread_owning_impl{ failure_thread }
+	, m_entry{ std::move(entry) }
 {
 	assert(tl_current_this == nullptr);
 	assert(tl_current_thread == nullptr);
+	// Parameters to the true libco entry function have to be passed as "globals".
 	tl_current_this = (detail::thread_base*)this;
 	tl_current_thread = co_active();
 	m_thread.reset(co_create(static_cast<unsigned int>(stack_size), &entry_wrapper));
@@ -106,21 +120,36 @@ inline thread<Entry>::thread(thread<Entry>::entry_t entry, size_t stack_size)
 		tl_current_thread = nullptr;
 		throw thread_create_failure();
 	}
+	// Handing execution over to the entry wrapper to let it store the parameters on its stack.
 	co_switch(m_thread.get());
+}
+
+inline thread::thread(thread::entry_t entry, thread_ref failure_thread)
+	: thread(std::move(entry), default_stack_size, failure_thread)
+{
 }
 
 inline thread_local detail::thread_base* detail::thread_base::tl_current_this = nullptr;
 inline thread_local cothread_t detail::thread_base::tl_current_thread = nullptr;
+inline thread_local detail::thread_base::thread_failure detail::thread_base::tl_current_failure{};
 
-template<typename Entry>
-inline void thread<Entry>::entry_wrapper() noexcept
+inline detail::thread_base::thread_failure::operator bool() const noexcept
+{
+	assert(!exception == !failing_thread);
+	return exception && failing_thread;
+}
+
+inline void thread::entry_wrapper() noexcept
 {
 	assert(tl_current_this != nullptr);
 	assert(tl_current_thread != nullptr);
-	auto* self = (thread<Entry>*)(std::exchange(tl_current_this, nullptr));
+	// Acquire parameters from constructor
+	auto* self = (thread*)(std::exchange(tl_current_this, nullptr));
 	auto creating_thread = thread_ref(std::exchange(tl_current_thread, nullptr));
 	try
 	{
+		// Hand control back to the creating cothread.
+		// This has to be done in the try block in case this cothread is destroyed before use.
 		creating_thread.switch_to();
 		(self->m_entry)();
 	}
@@ -132,9 +161,16 @@ inline void thread<Entry>::entry_wrapper() noexcept
 	}
 	catch(...)
 	{
-		self->m_exception = std::current_exception();
-		co_switch(creating_thread.m_thread);
+		assert(tl_current_failure == nullptr);
+		tl_current_failure.failing_thread = self;
+		tl_current_failure.exception = std::current_exception();
+		co_switch(self->m_failure_thread.get_thread());
 	}
+	// Handling entry function return
+	assert(tl_current_failure == nullptr);
+	tl_current_failure.failing_thread = self;
+	tl_current_failure.exception = std::make_exception_ptr(thread_return_failure());
+	co_switch(self->m_failure_thread.get_thread());
 }
 
 } // namespace co
