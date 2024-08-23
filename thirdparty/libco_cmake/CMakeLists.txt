@@ -12,16 +12,19 @@
 # TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 # THIS SOFTWARE.
 
-cmake_minimum_required(VERSION 3.8)
+# This is a supplementary CMakeLists file for libco made for the cppco wrapper
+# library, as libco doesn't have its own CMakeLists.txt file.
+
+cmake_minimum_required(VERSION 3.10)
 
 project(libco)
 
+# Options
 option(LIBCO_FORCE_FALLBACK "Force the use of the fallback implementation. (Fibers on Windows, SJLJ otherwise.)" OFF)
-option(LIBCO_MPROTECT "libco uses text sections to mark code as execuable. If this is not supported, set this option to
-ON to use mprotect instead. (Applicable to amd64, arm, ppc, x86)" OFF)
-option(LIBCO_NO_SSE "Win64 only: Provides a substantial speed-up, but will thrash XMM regs
-do not use this unless you are certain your application won't use SSE!" OFF)
+option(LIBCO_MPROTECT "libco uses text sections to mark code as execuable. If this is not supported, set this option to ON to use mprotect instead. (Applicable to amd64, arm, ppc, x86)" OFF)
+option(LIBCO_NO_SSE "Win64 only: Provides a substantial speed-up, but will thrash XMM regs. Do not use this unless you are certain your application won't use SSE!" OFF)
 
+# Sources
 set(LIBCO_DIR ${CMAKE_CURRENT_LIST_DIR}/../libco)
 
 set(LIBCO_MAIN_HDRS
@@ -35,7 +38,6 @@ set(LIBCO_MAIN_FILES ${LIBCO_MAIN_HDRS} ${LIBCO_MAIN_SRCS})
 set(LIBCO_ADDITIONAL_HDRS
 	${LIBCO_DIR}/settings.h
 	${LIBCO_DIR}/valgrind.h
-	src/msvc_section_fix.ipp
 )
 set(LIBCO_ADDITIONAL_SRCS
 	${LIBCO_DIR}/aarch64.c
@@ -54,8 +56,28 @@ set(LIBCO_ALL_FILES ${LIBCO_MAIN_FILES} ${LIBCO_ADDITIONAL_FILES})
 set(LIBCO_ALL_HDRS ${LIBCO_MAIN_HDRS} ${LIBCO_ADDITIONAL_HDRS})
 set(LIBCO_ALL_SRCS ${LIBCO_MAIN_SRCS} ${LIBCO_ADDITIONAL_SRCS})
 
-add_library(libco STATIC ${LIBCO_ALL_FILES})
-set_source_files_properties(${LIBCO_ADDITIONAL_SRCS} PROPERTIES HEADER_FILE_ONLY ON)
+set(LIBCO_FIXES_DIR ${CMAKE_CURRENT_LIST_DIR}/src)
+set(LIBCO_FIXES_HDRS ${LIBCO_FIXES_DIR}/msvc_section_fix.ipp)
+
+# Target
+add_library(libco STATIC ${LIBCO_ALL_FILES} ${LIBCO_FIXES_HDRS})
+target_include_directories(libco PUBLIC ${LIBCO_DIR})
+set_property(TARGET libco PROPERTY C_STANDARD_REQUIRED ON)
+set_property(TARGET libco PROPERTY C_STANDARD 11)
+set_property(TARGET libco PROPERTY C_EXTENSIONS OFF)
+if(MSVC)
+	target_compile_definitions(libco PRIVATE alignas=_Alignas)
+endif(MSVC)
+
+# Source groups
+source_group(TREE ${LIBCO_DIR} PREFIX "Source Files" FILES ${LIBCO_ALL_SRCS})
+source_group(TREE ${LIBCO_DIR} PREFIX "Header Files" FILES ${LIBCO_ALL_HDRS})
+source_group(TREE ${LIBCO_FIXES_DIR} PREFIX "Header Files" FILES ${LIBCO_FIXES_HDRS})
+
+# Set included C files as headers
+set_source_files_properties(${LIBCO_ADDITIONAL_SRCS} ${LIBCO_FIXES_HDRS} PROPERTIES HEADER_FILE_ONLY ON)
+
+# Option LIBCO_FORCE_FALLBACK
 if(LIBCO_FORCE_FALLBACK)
 	set_source_files_properties(${LIBCO_MAIN_SRCS} PROPERTIES HEADER_FILE_ONLY ON)
 	if(WIN32)
@@ -64,6 +86,8 @@ if(LIBCO_FORCE_FALLBACK)
 		set_source_files_properties(${LIBCO_DIR}/sjlj.c PROPERTIES HEADER_FILE_ONLY OFF)
 	endif(WIN32)
 endif(LIBCO_FORCE_FALLBACK)
+
+# Option LIBCO_MPROTECT
 if(LIBCO_MPROTECT)
 	target_compile_definitions(libco PRIVATE LIBCO_MPROTECT=)
 else(LIBCO_MPROTECT)
@@ -72,14 +96,8 @@ else(LIBCO_MPROTECT)
 			/FI"${CMAKE_CURRENT_LIST_DIR}/src/msvc_section_fix.ipp")
 	endif(WIN32)
 endif(LIBCO_MPROTECT)
+
+# Option LIBCO_NO_SSE
 if(LIBCO_NO_SSE)
 	target_compile_definitions(libco PRIVATE LIBCO_NO_SSE=)
 endif(LIBCO_NO_SSE)
-source_group(TREE ${LIBCO_DIR} PREFIX "Source Files" FILES ${LIBCO_ALL_SRCS})
-source_group(TREE ${LIBCO_DIR} PREFIX "Header Files" FILES ${LIBCO_ALL_HDRS})
-target_include_directories(libco PUBLIC ${LIBCO_DIR})
-set_property(TARGET libco PROPERTY C_STANDARD 11)
-set_property(TARGET libco PROPERTY C_EXTENSIONS OFF)
-if(MSVC)
-	target_compile_definitions(libco PRIVATE alignas=_Alignas)
-endif(MSVC)

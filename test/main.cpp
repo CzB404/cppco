@@ -96,7 +96,7 @@ TEST_F(cppco, destructors)
 	EXPECT_TRUE(destructed);
 }
 
-TEST_F(cppco, exception)
+TEST_F(cppco, exception_for_default_cothread)
 {
 	struct Dummy {};
 	auto current = co::current_thread();
@@ -113,7 +113,7 @@ TEST_F(cppco, returning_entry)
 	EXPECT_THROW(cothread.switch_to(), co::thread_return_failure);
 }
 
-TEST_F(cppco, exception_other_cothread)
+TEST_F(cppco, exception_for_other_cothread)
 {
 	struct Dummy {};
 	auto current = co::current_thread();
@@ -138,6 +138,47 @@ TEST_F(cppco, exception_other_cothread)
 		fail_cothread);
 	cothread.switch_to();
 	EXPECT_TRUE(caught);
+}
+
+TEST_F(cppco, exception_for_new_cothread)
+{
+	struct Dummy {};
+	auto current = co::current_thread();
+	bool caught = false;
+	auto cothread = co::thread([]()
+		{
+			throw Dummy();
+		});
+	auto fail_cothread = co::thread([current, &caught]()
+		{
+			try
+			{
+				current.switch_to();
+			}
+			catch (const Dummy&)
+			{
+				caught = true;
+				current.switch_to();
+			}
+		});
+	cothread.set_failure_thread(fail_cothread);
+	fail_cothread.switch_to();
+	cothread.switch_to();
+	EXPECT_TRUE(caught);
+}
+
+TEST_F(cppco, reset_entry)
+{
+	auto current = co::current_thread();
+	auto cothread = co::thread([]() {});
+	bool run = false;
+	cothread.reset([&]()
+	{
+		run = true;
+		current.switch_to();
+	});
+	cothread.switch_to();
+	EXPECT_TRUE(run);
 }
 
 } // namespace cppco_test
