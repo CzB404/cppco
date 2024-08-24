@@ -121,6 +121,12 @@ inline void thread::reset(thread::entry_t entry)
 	setup();
 }
 
+inline void thread::rewind()
+{
+	stop();
+	setup();
+}
+
 template<typename T>
 inline void detail::thread_impl<T>::switch_to() const
 {
@@ -203,7 +209,7 @@ inline void thread::setup()
 
 inline thread::operator bool() const noexcept
 {
-	return static_cast<bool>(m_entry);
+	return static_cast<bool>(m_active);
 }
 
 inline void thread::entry_wrapper() noexcept
@@ -215,6 +221,7 @@ inline void thread::entry_wrapper() noexcept
 		// Acquire parameters from setup
 		auto* self = std::exchange(tl_status->current_this, nullptr);
 		auto creating_thread = thread_ref(std::exchange(tl_status->current_thread, nullptr));
+		self->m_active = true;
 		try
 		{
 			// Hand control back to the cothread that called setup.
@@ -228,14 +235,14 @@ inline void thread::entry_wrapper() noexcept
 		{
 			assert(tl_status->current_thread != nullptr);
 			auto* stopping_thread = std::exchange(tl_status->current_thread, nullptr);
-			self->m_entry = nullptr;
+			self->m_active = false;
 			co_switch(stopping_thread); // Stop
 		}
 		catch (...)
 		{
 			assert(tl_status->current_exception == nullptr);
 			tl_status->current_exception = std::current_exception();
-			self->m_entry = nullptr;
+			self->m_active = false;
 			co_switch(self->m_failure_thread.get_thread()); // Failure
 		}
 	}

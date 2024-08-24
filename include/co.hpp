@@ -132,6 +132,7 @@ public:
 	using detail::thread_impl<thread>::switch_to;
 	void reset();
 	void reset(entry_t entry);
+	void rewind();
 
 	size_t get_stack_size() const noexcept;
 	void set_stack_size(size_t stack_size) noexcept;
@@ -169,6 +170,7 @@ private:
 	thread_ref m_failure_thread;
 	entry_t m_entry;
 	size_t m_stack_size;
+	bool m_active = false;
 };
 
 } // namespace co

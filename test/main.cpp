@@ -189,4 +189,38 @@ TEST_F(cppco, reset_entry)
 	EXPECT_TRUE(run);
 }
 
+TEST_F(cppco, rewind)
+{
+	bool a = false;
+	bool b = false;
+	auto current = co::current_thread();
+	auto cothread = co::thread([&]()
+	{
+		a = true;
+		current.switch_to();
+		b = true;
+		current.switch_to();
+	});
+	cothread.switch_to();
+	EXPECT_TRUE(a);
+	EXPECT_FALSE(b);
+	a = false;
+	b = false;
+	cothread.rewind();
+	cothread.switch_to();
+	EXPECT_TRUE(a);
+	EXPECT_FALSE(b);
+}
+
+TEST_F(cppco, rewind_after_exception)
+{
+	class Dummy {};
+	auto cothread = co::thread([]() { throw Dummy{}; });
+	EXPECT_THROW(cothread.switch_to(), Dummy);
+	EXPECT_FALSE(cothread);
+	cothread.rewind();
+	EXPECT_TRUE(cothread);
+	EXPECT_THROW(cothread.switch_to(), Dummy);
+}
+
 } // namespace cppco_test
