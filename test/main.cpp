@@ -36,6 +36,14 @@ public:
 	}
 };
 
+TEST_F(cppco, default_construct)
+{
+	auto cothread = co::thread();
+	EXPECT_FALSE(cothread);
+	EXPECT_EQ(cothread.get_stack_size(), co::thread::default_stack_size);
+	EXPECT_EQ(cothread.get_failure_thread(), co::current_thread());
+}
+
 TEST_F(cppco, create_and_destroy)
 {
 	EXPECT_CALL(libco_mock::api::get(), active()).Times(3); // Default failure cothread is the current cothread. + Constructor needs to initialize entry function and has to call back home. + Destructor kills the entry scope and also has to call back home.

@@ -29,13 +29,18 @@ class thread_return_failure;
 
 thread_ref current_thread() noexcept;
 
-class thread_create_failure : public std::runtime_error
+class thread_failure : public std::runtime_error
+{
+public:
+	using std::runtime_error::runtime_error;
+};
+
+class thread_create_failure : public thread_failure
 {
 public:
 	thread_create_failure() noexcept;
 };
-
-class thread_return_failure : public std::runtime_error
+class thread_return_failure : public thread_failure
 {
 public:
 	thread_return_failure() noexcept;
@@ -65,38 +70,11 @@ protected:
 		void operator()(cothread_t p) const noexcept;
 	};
 
-	struct thread_failure
-	{
-		thread* failing_thread = nullptr;
-		std::exception_ptr exception = nullptr;
-
-		thread_failure() = default;
-		thread_failure(std::nullptr_t) {};
-
-		explicit operator bool() const noexcept;
-		friend bool operator==(const thread_failure& lhs, std::nullptr_t) noexcept
-		{
-			return !lhs;
-		}
-		friend bool operator==(std::nullptr_t, const thread_failure& rhs) noexcept
-		{
-			return !rhs;
-		}
-		friend bool operator!=(const thread_failure& lhs, std::nullptr_t) noexcept
-		{
-			return static_cast<bool>(lhs);
-		}
-		friend bool operator!=(std::nullptr_t, const thread_failure& rhs) noexcept
-		{
-			return static_cast<bool>(rhs);
-		}
-	};
-
 	struct thread_status
 	{
 		cothread_t current_thread;
 		thread* current_this;
-		thread_failure current_failure;
+		std::exception_ptr current_exception;
 	};
 
 	static thread_local std::unique_ptr<thread_status> tl_status;
@@ -129,6 +107,10 @@ public:
 	thread_ref() = default;
 	using detail::thread_impl<thread_ref>::operator bool;
 	using detail::thread_impl<thread_ref>::switch_to;
+
+	friend bool operator==(const thread_ref lhs, const thread_ref rhs) noexcept;
+	friend bool operator!=(const thread_ref lhs, const thread_ref rhs) noexcept;
+
 private:
 	explicit thread_ref(cothread_t thread) noexcept;
 	friend cothread_t detail::thread_impl<thread_ref>::get_thread() const noexcept;
@@ -146,18 +128,24 @@ public:
 	// libco's recommendation for the default stack size is 1 MB on 32 bit systems, and to define the stack size in pointer size.
 	inline static constexpr size_t default_stack_size = 1 * 1024 * 1024 / 4 * sizeof(void*);
 
-	using detail::thread_impl<thread>::operator bool;
+	explicit operator bool() const noexcept;
 	using detail::thread_impl<thread>::switch_to;
-	void reset() noexcept;
-	void reset(entry_t entry) noexcept;
+	void reset();
+	void reset(entry_t entry);
+
+	size_t get_stack_size() const noexcept;
+	void set_stack_size(size_t stack_size) noexcept;
+
 	void set_failure_thread(thread_ref failure_thread) noexcept;
+	thread_ref get_failure_thread() const noexcept;
 
 	operator thread_ref() const noexcept;
-	
+
+	explicit thread(size_t stack_size = default_stack_size);
+	explicit thread(thread_ref failure_thread, size_t stack_size = default_stack_size);
 	explicit thread(entry_t entry, thread_ref failure_thread = current_thread());
 	explicit thread(entry_t entry, size_t stack_size, thread_ref failure_thread = current_thread());
 
-	thread() = delete;
 	thread(const thread& other) = delete;
 	thread(thread&& other) = delete;
 	thread& operator=(const thread& other) = delete;
