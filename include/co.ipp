@@ -201,7 +201,15 @@ inline void thread::setup()
 	tl_status->current_thread = co_active();
 	if (!m_thread)
 	{
-		m_thread.reset(co_create(static_cast<unsigned int>(m_stack_size), &entry_wrapper));
+		auto cothread = cothread_t{};
+		auto int_stack_size = static_cast<unsigned int>(m_stack_size);
+#ifdef CPPCO_FLB_LIBCO
+		size_t real_stack_size;
+		cothread = co_create(int_stack_size, &entry_wrapper, &real_stack_size);
+#else // CPPCO_FLB_LIBCO
+		cothread = co_create(int_stack_size, &entry_wrapper);
+#endif // CPPCO_FLB_LIBCO
+		m_thread.reset(cothread);
 	}
 	if (m_thread == nullptr)
 	{
