@@ -58,6 +58,7 @@ set(LIBCO_ALL_SRCS ${LIBCO_MAIN_SRCS} ${LIBCO_ADDITIONAL_SRCS})
 
 # Target
 add_library(libco STATIC ${LIBCO_ALL_FILES})
+set_target_properties(libco PROPERTIES PREFIX "") # `libco` already contains `lib`
 target_include_directories(libco PUBLIC ${LIBCO_DIR})
 set_property(TARGET libco PROPERTY C_STANDARD_REQUIRED ON)
 set_property(TARGET libco PROPERTY C_STANDARD 11)
@@ -65,6 +66,8 @@ set_property(TARGET libco PROPERTY C_EXTENSIONS OFF)
 if(MSVC)
 	target_compile_options(libco PRIVATE /Zc:__STDC__)
 endif(MSVC)
+install(TARGETS libco)
+install(FILES ${LIBCO_MAIN_HDRS} DESTINATION include)
 
 # Source groups
 source_group(TREE ${LIBCO_DIR} PREFIX "Source Files" FILES ${LIBCO_ALL_SRCS})
