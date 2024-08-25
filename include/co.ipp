@@ -88,6 +88,13 @@ inline size_t thread::get_stack_size() const noexcept
 inline void thread::set_stack_size(size_t stack_size) noexcept
 {
 	m_stack_size = stack_size;
+	if (!*this)
+	{
+		return;
+	}
+	stop();
+	m_thread.reset();
+	setup();
 }
 
 inline void thread::set_failure_thread(thread_ref failure_thread) noexcept
@@ -157,14 +164,13 @@ inline void thread::stop() const noexcept
 }
 
 inline thread::thread(size_t stack_size)
-	: m_stack_size{ stack_size }
-	, m_failure_thread{ current_thread() }
+	: thread(current_thread(), stack_size) 
 {
 }
 
 inline thread::thread(thread_ref failure_thread, size_t stack_size)
-	: m_stack_size{ stack_size }
-	, m_failure_thread{ failure_thread }
+	: m_failure_thread{ failure_thread }
+	, m_stack_size{ stack_size }
 {
 }
 

@@ -72,8 +72,8 @@ protected:
 
 	struct thread_status
 	{
-		cothread_t current_thread;
-		thread* current_this;
+		cothread_t current_thread = nullptr;
+		thread* current_this = nullptr;
 		std::exception_ptr current_exception;
 	};
 
@@ -160,8 +160,7 @@ private:
 	using thread_ptr = std::unique_ptr<void, thread_deleter>;
 
 	friend cothread_t detail::thread_impl<thread>::get_thread() const noexcept;
-	template<typename T>
-	friend void detail::thread_impl<T>::switch_to() const;
+	friend void detail::thread_impl<thread>::switch_to() const;
 
 	cothread_t get_thread() const noexcept;
 	void stop() const noexcept;

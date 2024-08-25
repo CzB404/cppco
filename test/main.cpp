@@ -107,8 +107,7 @@ TEST_F(cppco, destructors)
 TEST_F(cppco, exception_for_default_cothread)
 {
 	struct Dummy {};
-	auto current = co::current_thread();
-	auto cothread = co::thread([current]()
+	auto cothread = co::thread([]()
 	{
 		throw Dummy();
 	});
@@ -221,6 +220,28 @@ TEST_F(cppco, rewind_after_exception)
 	cothread.rewind();
 	EXPECT_TRUE(cothread);
 	EXPECT_THROW(cothread.switch_to(), Dummy);
+}
+
+TEST_F(cppco, set_stack_size)
+{
+	EXPECT_CALL(::libco_mock::api::get(), create(_, _)).Times(0);
+	auto cothread = co::thread();
+	EXPECT_FALSE(cothread);
+	EXPECT_EQ(cothread.get_stack_size(), co::thread::default_stack_size);
+	EXPECT_CALL(::libco_mock::api::get(), create(_, _)).Times(0);
+	cothread.set_stack_size(2 * co::thread::default_stack_size);
+	EXPECT_EQ(cothread.get_stack_size(), 2 * co::thread::default_stack_size);
+}
+
+TEST_F(cppco, set_stack_size_when_active)
+{
+	EXPECT_CALL(::libco_mock::api::get(), create(co::thread::default_stack_size, _)).Times(1);
+	auto cothread = co::thread([]() {});
+	EXPECT_TRUE(cothread);
+	EXPECT_EQ(cothread.get_stack_size(), co::thread::default_stack_size);
+	EXPECT_CALL(::libco_mock::api::get(), create(2 * co::thread::default_stack_size, _)).Times(1);
+	cothread.set_stack_size(2 * co::thread::default_stack_size);
+	EXPECT_EQ(cothread.get_stack_size(), 2 * co::thread::default_stack_size);
 }
 
 } // namespace cppco_test

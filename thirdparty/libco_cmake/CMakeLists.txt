@@ -21,7 +21,7 @@ project(libco)
 
 # Options
 option(LIBCO_FORCE_FALLBACK "Force the use of the fallback implementation. (Fibers on Windows, SJLJ otherwise.)" OFF)
-option(LIBCO_MPROTECT "libco uses text sections to mark code as execuable. If this is not supported, set this option to ON to use mprotect instead. (Applicable to amd64, arm, ppc, x86)" OFF)
+option(LIBCO_MPROTECT "libco uses text sections to mark code as execuable. If this is not supported, set this option to ON to use mprotect instead. (Applicable to amd64, arm, ppc, x86)" "$<BOOL:$<IF:$<CXX_COMPILER_ID:MSVC>>:ON:OFF>>")
 option(LIBCO_NO_SSE "Win64 only: Provides a substantial speed-up, but will thrash XMM regs. Do not use this unless you are certain your application won't use SSE!" OFF)
 
 # Sources
@@ -56,26 +56,22 @@ set(LIBCO_ALL_FILES ${LIBCO_MAIN_FILES} ${LIBCO_ADDITIONAL_FILES})
 set(LIBCO_ALL_HDRS ${LIBCO_MAIN_HDRS} ${LIBCO_ADDITIONAL_HDRS})
 set(LIBCO_ALL_SRCS ${LIBCO_MAIN_SRCS} ${LIBCO_ADDITIONAL_SRCS})
 
-set(LIBCO_FIXES_DIR ${CMAKE_CURRENT_LIST_DIR}/src)
-set(LIBCO_FIXES_HDRS ${LIBCO_FIXES_DIR}/msvc_section_fix.ipp)
-
 # Target
-add_library(libco STATIC ${LIBCO_ALL_FILES} ${LIBCO_FIXES_HDRS})
+add_library(libco STATIC ${LIBCO_ALL_FILES})
 target_include_directories(libco PUBLIC ${LIBCO_DIR})
 set_property(TARGET libco PROPERTY C_STANDARD_REQUIRED ON)
 set_property(TARGET libco PROPERTY C_STANDARD 11)
 set_property(TARGET libco PROPERTY C_EXTENSIONS OFF)
 if(MSVC)
-	target_compile_definitions(libco PRIVATE alignas=_Alignas)
+	target_compile_options(libco PRIVATE /Zc:__STDC__)
 endif(MSVC)
 
 # Source groups
 source_group(TREE ${LIBCO_DIR} PREFIX "Source Files" FILES ${LIBCO_ALL_SRCS})
 source_group(TREE ${LIBCO_DIR} PREFIX "Header Files" FILES ${LIBCO_ALL_HDRS})
-source_group(TREE ${LIBCO_FIXES_DIR} PREFIX "Header Files" FILES ${LIBCO_FIXES_HDRS})
 
 # Set included C files as headers
-set_source_files_properties(${LIBCO_ADDITIONAL_SRCS} ${LIBCO_FIXES_HDRS} PROPERTIES HEADER_FILE_ONLY ON)
+set_source_files_properties(${LIBCO_ADDITIONAL_SRCS} PROPERTIES HEADER_FILE_ONLY ON)
 
 # Option LIBCO_FORCE_FALLBACK
 if(LIBCO_FORCE_FALLBACK)
@@ -90,11 +86,6 @@ endif(LIBCO_FORCE_FALLBACK)
 # Option LIBCO_MPROTECT
 if(LIBCO_MPROTECT)
 	target_compile_definitions(libco PRIVATE LIBCO_MPROTECT=)
-else(LIBCO_MPROTECT)
-	if(WIN32)
-		set_source_files_properties(${LIBCO_DIR}/libco.c PROPERTIES COMPILE_FLAGS
-			/FI"${CMAKE_CURRENT_LIST_DIR}/src/msvc_section_fix.ipp")
-	endif(WIN32)
 endif(LIBCO_MPROTECT)
 
 # Option LIBCO_NO_SSE
