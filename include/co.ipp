@@ -33,7 +33,7 @@ inline thread_return_failure::thread_return_failure() noexcept
 {
 }
 
-inline thread_ref current_thread() noexcept
+inline thread_ref active() noexcept
 {
 	return thread_ref(co_active());
 }
@@ -164,7 +164,7 @@ inline void thread::stop() const noexcept
 }
 
 inline thread::thread(size_t stack_size)
-	: thread(current_thread(), stack_size) 
+	: thread(active(), stack_size) 
 {
 }
 

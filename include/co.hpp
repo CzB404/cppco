@@ -28,7 +28,7 @@ class thread_failure;
 class thread_create_failure;
 class thread_return_failure;
 
-thread_ref current_thread() noexcept;
+thread_ref active() noexcept;
 
 class thread_failure : public std::runtime_error
 {
@@ -116,7 +116,7 @@ private:
 	explicit thread_ref(cothread_t thread) noexcept;
 	friend cothread_t detail::thread_impl<thread_ref>::get_thread() const noexcept;
 	friend class thread;
-	friend thread_ref current_thread() noexcept;
+	friend thread_ref active() noexcept;
 	cothread_t get_thread() const noexcept;
 	cothread_t m_thread = nullptr;
 };
@@ -145,8 +145,8 @@ public:
 
 	explicit thread(size_t stack_size = default_stack_size);
 	explicit thread(thread_ref failure_thread, size_t stack_size = default_stack_size);
-	explicit thread(entry_t entry, thread_ref failure_thread = current_thread());
-	explicit thread(entry_t entry, size_t stack_size, thread_ref failure_thread = current_thread());
+	explicit thread(entry_t entry, thread_ref failure_thread = active());
+	explicit thread(entry_t entry, size_t stack_size, thread_ref failure_thread = active());
 
 	thread(const thread& other) = delete;
 	thread(thread&& other) = delete;
