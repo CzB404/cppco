@@ -71,7 +71,6 @@ TEST_F(cppco, default_construct)
 TEST_F(cppco, create_and_destroy)
 {
 	EXPECT_CALL(libco_mock::api::get(), create(_, _));
-	EXPECT_CALL(libco_mock::api::get(), switch_to(_)).Times(4); // 2 in constructor, 2 in destructor
 	EXPECT_CALL(libco_mock::api::get(), delete_this(_));
 	co::thread cothread([]() {});
 }
@@ -79,9 +78,13 @@ TEST_F(cppco, create_and_destroy)
 TEST_F(cppco, create_and_reset)
 {
 	EXPECT_CALL(libco_mock::api::get(), create(_, _));
-	EXPECT_CALL(libco_mock::api::get(), switch_to(_)).Times(4); // 2 in constructor, 2 in reset
+	EXPECT_CALL(libco_mock::api::get(), switch_to(_)).Times(4); // 2 in test, 2 in reset
 	EXPECT_CALL(libco_mock::api::get(), delete_this(_));
-	auto cothread = co::thread([]() {});
+	auto cothread = co::thread([]()
+	{
+		co::active().get_parent().switch_to();
+	});
+	cothread.switch_to(); // Activate it
 	cothread.reset();
 }
 
@@ -112,7 +115,7 @@ TEST_F(cppco, destructors)
 
 	{
 		EXPECT_CALL(libco_mock::api::get(), create(_, _)).Times(1);
-		EXPECT_CALL(libco_mock::api::get(), switch_to(_)).Times(6); // 2 in main, 2 in constructor, 2 in reset
+		EXPECT_CALL(libco_mock::api::get(), switch_to(_)).Times(4); // 2 in test, 2 in reset
 		auto& parent = co::active();
 		auto cothread = co::thread([&parent, &destructed]()
 		{
@@ -235,10 +238,16 @@ TEST_F(cppco, rewind)
 TEST_F(cppco, rewind_after_exception)
 {
 	class Dummy {};
-	auto cothread = co::thread([]() { throw Dummy{}; });
+	auto cothread = co::thread([]()
+	{
+		co::active().get_parent().switch_to();
+		throw Dummy{};
+	});
+	cothread.switch_to(); // Activate it
 	EXPECT_THROW(cothread.switch_to(), Dummy);
 	EXPECT_FALSE(cothread);
 	cothread.rewind();
+	cothread.switch_to(); // Activate it
 	EXPECT_TRUE(cothread);
 	EXPECT_THROW(cothread.switch_to(), Dummy);
 }
@@ -257,7 +266,11 @@ TEST_F(cppco, set_stack_size)
 TEST_F(cppco, set_stack_size_when_active)
 {
 	EXPECT_CALL(::libco_mock::api::get(), create(co::thread::default_stack_size, _)).Times(1);
-	auto cothread = co::thread([]() {});
+	auto cothread = co::thread([]()
+	{
+		co::active().get_parent().switch_to();
+	});
+	cothread.switch_to(); // Activate it
 	EXPECT_TRUE(cothread);
 	EXPECT_EQ(cothread.get_stack_size(), co::thread::default_stack_size);
 	EXPECT_CALL(::libco_mock::api::get(), create(2 * co::thread::default_stack_size, _)).Times(1);

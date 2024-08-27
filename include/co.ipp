@@ -46,7 +46,7 @@ inline const thread& active() noexcept
 
 inline cothread_t thread::get_thread() const noexcept
 {
-	return *this ? m_thread.get() : nullptr;
+	return m_thread.get();
 }
 
 inline size_t thread::get_stack_size() const noexcept
@@ -67,7 +67,6 @@ inline void thread::set_stack_size(size_t stack_size) noexcept
 
 inline void thread::set_parent(const thread& parent) noexcept
 {
-	assert(parent);
 	m_parent = &parent;
 }
 
@@ -172,11 +171,6 @@ inline thread::thread(thread::entry_t entry, size_t stack_size, const thread& pa
 
 inline void thread::setup()
 {
-	assert(tl_status->current_this == nullptr);
-	assert(tl_status->current_thread == nullptr);
-	// Parameters to the true libco entry function have to be passed as "globals".
-	tl_status->current_this = this;
-	tl_status->current_thread = &active();
 	if (!m_thread)
 	{
 		auto cothread = cothread_t{};
@@ -191,13 +185,9 @@ inline void thread::setup()
 	}
 	if (m_thread == nullptr)
 	{
-		tl_status->current_this = nullptr;
 		tl_status->current_thread = nullptr;
 		throw thread_create_failure();
 	}
-	// Handing execution over to the entry wrapper to let it store the parameters on its stack.
-	tl_status->current_active = this;
-	co_switch(m_thread.get());
 }
 
 inline thread::operator bool() const noexcept
@@ -209,18 +199,10 @@ inline void thread::entry_wrapper() noexcept
 {
 	while (true) // Reuse
 	{
-		assert(tl_status->current_this != nullptr);
-		assert(tl_status->current_thread != nullptr);
-		// Acquire parameters from setup
-		auto* self = std::exchange(tl_status->current_this, nullptr);
-		auto&& creating_thread = *std::exchange(tl_status->current_thread, nullptr);
-		self->m_active = true;
+		co::active().m_active = true;
 		try
 		{
-			// Hand control back to the cothread that called setup.
-			// This has to be done in the try block in case this cothread is stopped before use.
-			creating_thread.switch_to();
-			(self->m_entry)();
+			co::active().m_entry();
 			// Handling entry function return
 			throw thread_return_failure();
 		}
@@ -228,7 +210,7 @@ inline void thread::entry_wrapper() noexcept
 		{
 			assert(tl_status->current_thread != nullptr);
 			auto&& stopping_thread = *std::exchange(tl_status->current_thread, nullptr);
-			self->m_active = false;
+			co::active().m_active = false;
 			tl_status->current_active = &stopping_thread;
 			co_switch(stopping_thread.get_thread()); // Stop
 		}
@@ -236,9 +218,9 @@ inline void thread::entry_wrapper() noexcept
 		{
 			assert(tl_status->current_exception == nullptr);
 			tl_status->current_exception = std::current_exception();
-			self->m_active = false;
-			tl_status->current_active = self->m_parent;
-			co_switch(self->m_parent->get_thread()); // Failure
+			co::active().m_active = false;
+			tl_status->current_active = co::active().m_parent;
+			co_switch(tl_status->current_active->get_thread()); // Failure
 		}
 	}
 }

@@ -100,7 +100,6 @@ private:
 		std::unique_ptr<thread> main;
 		const thread* current_active = nullptr;
 		const thread* current_thread = nullptr;
-		thread* current_this = nullptr;
 		std::exception_ptr current_exception;
 
 		thread_status() noexcept;
