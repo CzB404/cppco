@@ -88,6 +88,51 @@ TEST_F(cppco, create_and_reset)
 	cothread.reset();
 }
 
+TEST_F(cppco, move_construct)
+{
+	bool a = false;
+	bool b = false;
+	auto cothread = co::thread([&]()
+	{
+		a = true;
+		co::active().get_parent().switch_to();
+		b = true;
+		co::active().get_parent().switch_to();
+	});
+	cothread.switch_to();
+	EXPECT_TRUE(cothread);
+	EXPECT_TRUE(a);
+	EXPECT_FALSE(b);
+	auto moved_cothread = std::move(cothread);
+	EXPECT_FALSE(cothread);
+	moved_cothread.switch_to();
+	EXPECT_TRUE(a);
+	EXPECT_TRUE(b);
+}
+
+TEST_F(cppco, move_assign)
+{
+	bool a = false;
+	bool b = false;
+	auto cothread = co::thread([&]()
+		{
+			a = true;
+			co::active().get_parent().switch_to();
+			b = true;
+			co::active().get_parent().switch_to();
+		});
+	auto moved_cothread = co::thread();
+	cothread.switch_to();
+	EXPECT_TRUE(cothread);
+	EXPECT_TRUE(a);
+	EXPECT_FALSE(b);
+	moved_cothread = std::move(cothread);
+	EXPECT_FALSE(cothread);
+	moved_cothread.switch_to();
+	EXPECT_TRUE(a);
+	EXPECT_TRUE(b);
+}
+
 TEST_F(cppco, creation_failure)
 {
 	EXPECT_CALL(libco_mock::api::get(), create(_, _)).WillOnce(Return(nullptr));

@@ -91,7 +91,7 @@ inline void thread::reset()
 inline void thread::reset(thread::entry_t entry)
 {
 	stop();
-	m_entry = std::move(entry);
+	m_entry = std::make_unique<entry_t>(std::move(entry));
 	setup();
 }
 
@@ -150,6 +150,25 @@ inline thread::~thread()
 	}
 }
 
+thread::thread(thread&& other) noexcept
+	: m_thread{ std::move(other.m_thread) }
+	, m_parent{ std::exchange(other.m_parent, &co::active()) }
+	, m_entry{ std::move(other.m_entry) }
+	, m_stack_size{ std::exchange(other.m_stack_size, default_stack_size) }
+	, m_active{ std::exchange(other.m_active, false) }
+{
+}
+
+thread& thread::operator=(thread&& other) noexcept
+{
+	m_thread = std::move(other.m_thread);
+	m_parent = std::exchange(other.m_parent, &co::active());
+	m_entry = std::move(other.m_entry);
+	m_stack_size = std::exchange(other.m_stack_size, default_stack_size);
+	m_active = std::exchange(other.m_active, false);
+	return *this;
+}
+
 inline thread::thread(cothread_t cothread, thread::private_token_t) noexcept
 	: m_thread{ cothread }
 	, m_active{ true }
@@ -163,7 +182,7 @@ inline thread::thread(thread::entry_t entry, const thread& parent)
 
 inline thread::thread(thread::entry_t entry, size_t stack_size, const thread& parent)
 	: m_parent{ &parent }
-	, m_entry{ std::move(entry) }
+	, m_entry{ std::make_unique<entry_t>(std::move(entry)) }
 	, m_stack_size{ stack_size }
 {
 	setup();
@@ -202,7 +221,7 @@ inline void thread::entry_wrapper() noexcept
 		co::active().m_active = true;
 		try
 		{
-			co::active().m_entry();
+			(*co::active().m_entry)();
 			// Handling entry function return
 			throw thread_return_failure();
 		}

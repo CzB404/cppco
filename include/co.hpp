@@ -74,14 +74,14 @@ public:
 	explicit thread(entry_t entry, size_t stack_size, const thread& parent = active());
 
 	thread(const thread& other) = delete;
-	thread(thread&& other) = delete;
+	thread(thread&& other) noexcept;
 	thread& operator=(const thread& other) = delete;
-	thread& operator=(thread&& other) = delete;
+	thread& operator=(thread&& other) noexcept;
 	~thread();
 
 private:
 	class private_token_t {};
-	inline static constexpr private_token_t private_token;
+	inline static constexpr private_token_t private_token{};
 public:
 	explicit thread(cothread_t cothread, private_token_t) noexcept;
 
@@ -117,7 +117,7 @@ private:
 
 	thread_ptr m_thread;
 	const thread* m_parent = nullptr;
-	entry_t m_entry;
+	std::unique_ptr<entry_t> m_entry;
 	size_t m_stack_size = 0;
 	mutable bool m_active = false;
 };
