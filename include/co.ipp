@@ -21,7 +21,13 @@
 
 namespace co {
 
-inline thread_local std::unique_ptr<thread::thread_status> thread::tl_status = std::make_unique<thread::thread_status>();
+#ifndef CPPCO_CUSTOM_STATUS
+inline thread::thread_status& thread::status()
+{
+	static thread_local std::unique_ptr<thread::thread_status> instance = std::make_unique<thread::thread_status>();
+	return *instance;
+}
+#endif // CPPCO_CUSTOM_STATUS
 
 inline thread::thread_status::thread_status() noexcept
 	: main{ std::make_unique<thread>(co_active(), private_token) }
@@ -41,7 +47,7 @@ inline thread_return_failure::thread_return_failure() noexcept
 
 inline const thread& active() noexcept
 {
-	return *thread::tl_status->current_active;
+	return *thread::status().current_active;
 }
 
 inline cothread_t thread::get_thread() const noexcept
@@ -104,16 +110,19 @@ inline void thread::rewind()
 inline void thread::switch_to() const
 {
 	auto* thread = get_thread();
-	assert(thread != nullptr);
-	tl_status->current_active = this;
+	if (thread == nullptr)
+	{
+
+	}
+	status().current_active = this;
 	co_switch(thread);
 	// If the current thread variable is set while switch_to is called then it's the stop function that's issuing the call and the entry function stack has to be destroyed. Propagate an exception to achieve that.
- 	if (tl_status->current_thread)
+ 	if (status().current_thread)
 	{
 		throw thread_stopping();
 	}
 	// If there is an active exception then this is the callback to the failure handling cothread. Rethrow the exception.
-	if (auto exception = std::exchange(tl_status->current_exception, nullptr))
+	if (auto exception = std::exchange(status().current_exception, nullptr))
 	{
 		std::rethrow_exception(exception);
 	}
@@ -125,8 +134,8 @@ inline void thread::stop() const noexcept
 	{
 		return;
 	}
-	assert(tl_status->current_thread == nullptr);
-	tl_status->current_thread = &active();
+	assert(status().current_thread == nullptr);
+	status().current_thread = &active();
 	switch_to();
 }
 
@@ -204,7 +213,7 @@ inline void thread::setup()
 	}
 	if (m_thread == nullptr)
 	{
-		tl_status->current_thread = nullptr;
+		status().current_thread = nullptr;
 		throw thread_create_failure();
 	}
 }
@@ -227,19 +236,19 @@ inline void thread::entry_wrapper() noexcept
 		}
 		catch (const thread_stopping&)
 		{
-			assert(tl_status->current_thread != nullptr);
-			auto&& stopping_thread = *std::exchange(tl_status->current_thread, nullptr);
+			assert(status().current_thread != nullptr);
+			auto&& stopping_thread = *std::exchange(status().current_thread, nullptr);
 			co::active().m_active = false;
-			tl_status->current_active = &stopping_thread;
+			status().current_active = &stopping_thread;
 			co_switch(stopping_thread.get_thread()); // Stop
 		}
 		catch (...)
 		{
-			assert(tl_status->current_exception == nullptr);
-			tl_status->current_exception = std::current_exception();
+			assert(status().current_exception == nullptr);
+			status().current_exception = std::current_exception();
 			co::active().m_active = false;
-			tl_status->current_active = co::active().m_parent;
-			co_switch(tl_status->current_active->get_thread()); // Failure
+			status().current_active = co::active().m_parent;
+			co_switch(status().current_active->get_thread()); // Failure
 		}
 	}
 }

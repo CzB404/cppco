@@ -12,6 +12,21 @@
 // TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 // THIS SOFTWARE.
 
+/// \file co.hpp
+/// `co.hpp` is the main header file for `cppco`.
+///
+/// `cppco` has customization macros that affect the behavior of the code
+/// defined in this file.
+/// 
+/// - `CPPCO_CUSTOM_STATUS`: If defined the private static function definition
+///   `thread::thread_status& thread::status()` will be omitted. This is useful
+///   for clients that want to handle `thread_local` storage directly. The
+///   custom status function may only call the constructor of
+///   `thread::thread_status` and has to keep it alive throughout the runtime of
+///   the application.
+/// - `CPPCO_FLB_LIBCO`: If defined then the three argument `co_create` function
+///   will be used as it is defined in the `libco`'s `flb_libco` fork.
+
 #ifndef CO_HPP_INCLUDE_GUARD
 #define CO_HPP_INCLUDE_GUARD
 
@@ -192,7 +207,7 @@ private:
 	cothread_t get_thread() const noexcept;
 	void stop() const noexcept;
 
-	static thread_local std::unique_ptr<thread_status> tl_status;
+	static thread_status& status();
 
 	thread_ptr m_thread;
 	const thread* m_parent = nullptr;
