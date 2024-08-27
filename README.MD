@@ -1,9 +1,10 @@
 `cppco`
 =======
 
-`cppco` is a C++ wrapper library for the cooperative multithreading library
+`cppco` is a C++ wrapper library for the cooperative multithreading C library
 [`libco`](https://github.com/higan-emu/libco), originally written by
-[Byuu](https://en.wikipedia.org/wiki/Near_(programmer)) for the Higan Emulator.
+[Byuu](https://en.wikipedia.org/wiki/Near_(programmer)) for
+[higan](https://github.com/higan-emu/higan).
 
 The "cooperative multithreading" `libco` implements could also be called a
 [coroutine](https://en.wikipedia.org/wiki/Coroutine) or a
@@ -32,24 +33,21 @@ The simplest "Hello World!" program using `cppco` is the following:
 int main()
 {
 	using namespace std;
-	
-	// Remember the cothread to switch back to when done.
-	auto parent = co::active();
 
 	// Create the cothread.
-	auto cothread = co::thread([parent]()
+	auto cothread = co::thread([]()
 	{
 		// Printing on `cothread`
 		cout << "Hello World!" << endl;
 
-		// Switch back to `parent`.
-		parent.switch_to();
+		// Switch back to the parent.
+		co::active().get_parent().switch_to();
 	});
 
 	// Switch to `cothread`.
 	cothread.switch_to();
 
-	// Execution will resume here when `cothread` switches back to `parent`.
+	// Execution will resume here when `cothread` switches back to its parent.
 	return 0;
 }
 ```
@@ -57,7 +55,7 @@ int main()
 Rationale
 ---------
 
-`libco` provides a minimalistic
+`libco` provides a
 [C API](https://github.com/higan-emu/libco/blob/master/doc/usage.md) which is
 not safe to use directly in C++ as it doesn't handle C++ features such as
 destructors or exceptions, leading to resource leaks and crashes unless special

@@ -22,13 +22,12 @@
 namespace co {
 
 class thread;
-class thread_ref;
 
 class thread_failure;
 class thread_create_failure;
 class thread_return_failure;
 
-thread_ref active() noexcept;
+const thread& active() noexcept;
 
 class thread_failure : public std::runtime_error
 {
@@ -47,21 +46,46 @@ public:
 	thread_return_failure() noexcept;
 };
 
-namespace detail {
-
-template<typename T>
-class thread_impl;
-
-class thread_base
+class thread
 {
-protected:
-	thread_base() noexcept = default;
-	thread_base(const thread_base& other) noexcept = default;
-	thread_base(thread_base&& other) noexcept = default;
-	thread_base& operator=(const thread_base& other) noexcept = default;
-	thread_base& operator=(thread_base&& other) noexcept = default;
-	~thread_base() noexcept = default;
+public:
+	using entry_t = std::function<void()>;
 
+	// libco's recommendation for the default stack size is 1 MB on 32 bit systems, and to define the stack size in pointer size.
+	inline static constexpr size_t default_stack_size = 1 * 1024 * 1024 / 4 * sizeof(void*);
+
+	explicit operator bool() const noexcept;
+	void switch_to() const;
+	void reset();
+	void reset(entry_t entry);
+	void rewind();
+
+	friend const thread& active() noexcept;
+
+	size_t get_stack_size() const noexcept;
+	void set_stack_size(size_t stack_size) noexcept;
+
+	void set_parent(const thread& parent) noexcept;
+	const thread& get_parent() const noexcept;
+
+	explicit thread(size_t stack_size = default_stack_size);
+	explicit thread(const thread& parent, size_t stack_size = default_stack_size);
+	explicit thread(entry_t entry, const thread& parent = active());
+	explicit thread(entry_t entry, size_t stack_size, const thread& parent = active());
+
+	thread(const thread& other) = delete;
+	thread(thread&& other) = delete;
+	thread& operator=(const thread& other) = delete;
+	thread& operator=(thread&& other) = delete;
+	~thread();
+
+private:
+	class private_token_t {};
+	inline static constexpr private_token_t private_token;
+public:
+	explicit thread(cothread_t cothread, private_token_t) noexcept;
+
+private:
 	class thread_stopping : public std::exception
 	{
 	};
@@ -73,104 +97,30 @@ protected:
 
 	struct thread_status
 	{
-		cothread_t current_thread = nullptr;
+		std::unique_ptr<thread> main;
+		const thread* current_active = nullptr;
+		const thread* current_thread = nullptr;
 		thread* current_this = nullptr;
 		std::exception_ptr current_exception;
+
+		thread_status() noexcept;
 	};
 
-	static thread_local std::unique_ptr<thread_status> tl_status;
-};
-
-template<typename T>
-class thread_impl : private thread_base
-{
-public:
-	explicit operator bool() const noexcept;
-	void switch_to() const;
-
-protected:
-	using thread_base::thread_deleter;
-	using thread_base::thread_stopping;
-	thread_impl() = default;
-
-	friend class ::co::thread;
-	friend class ::co::thread_ref;
-	cothread_t get_thread() const noexcept;
-
-	using thread_base::tl_status;
-};
-
-} // namespace detail
-
-class thread_ref : private detail::thread_impl<thread_ref>
-{
-public:
-	thread_ref() = default;
-	using detail::thread_impl<thread_ref>::operator bool;
-	using detail::thread_impl<thread_ref>::switch_to;
-
-	friend bool operator==(const thread_ref lhs, const thread_ref rhs) noexcept;
-	friend bool operator!=(const thread_ref lhs, const thread_ref rhs) noexcept;
-
-private:
-	explicit thread_ref(cothread_t thread) noexcept;
-	friend cothread_t detail::thread_impl<thread_ref>::get_thread() const noexcept;
-	friend class thread;
-	friend thread_ref active() noexcept;
-	cothread_t get_thread() const noexcept;
-	cothread_t m_thread = nullptr;
-};
-
-class thread : private detail::thread_impl<thread>
-{
-public:
-	using entry_t = std::function<void()>;
-
-	// libco's recommendation for the default stack size is 1 MB on 32 bit systems, and to define the stack size in pointer size.
-	inline static constexpr size_t default_stack_size = 1 * 1024 * 1024 / 4 * sizeof(void*);
-
-	explicit operator bool() const noexcept;
-	using detail::thread_impl<thread>::switch_to;
-	void reset();
-	void reset(entry_t entry);
-	void rewind();
-
-	size_t get_stack_size() const noexcept;
-	void set_stack_size(size_t stack_size) noexcept;
-
-	void set_failure_thread(thread_ref failure_thread) noexcept;
-	thread_ref get_failure_thread() const noexcept;
-
-	operator thread_ref() const noexcept;
-
-	explicit thread(size_t stack_size = default_stack_size);
-	explicit thread(thread_ref failure_thread, size_t stack_size = default_stack_size);
-	explicit thread(entry_t entry, thread_ref failure_thread = active());
-	explicit thread(entry_t entry, size_t stack_size, thread_ref failure_thread = active());
-
-	thread(const thread& other) = delete;
-	thread(thread&& other) = delete;
-	thread& operator=(const thread& other) = delete;
-	thread& operator=(thread&& other) = delete;
-	~thread();
-
-private:
 	void setup();
 	static void entry_wrapper() noexcept;
 
 	using thread_ptr = std::unique_ptr<void, thread_deleter>;
 
-	friend cothread_t detail::thread_impl<thread>::get_thread() const noexcept;
-	friend void detail::thread_impl<thread>::switch_to() const;
-
 	cothread_t get_thread() const noexcept;
 	void stop() const noexcept;
 
+	static thread_local std::unique_ptr<thread_status> tl_status;
+
 	thread_ptr m_thread;
-	thread_ref m_failure_thread;
+	const thread* m_parent = nullptr;
 	entry_t m_entry;
-	size_t m_stack_size;
-	bool m_active = false;
+	size_t m_stack_size = 0;
+	mutable bool m_active = false;
 };
 
 } // namespace co

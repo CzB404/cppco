@@ -21,7 +21,13 @@
 
 namespace co {
 
-inline thread_local std::unique_ptr<detail::thread_base::thread_status> detail::thread_base::tl_status = std::make_unique<detail::thread_base::thread_status>();
+inline thread_local std::unique_ptr<thread::thread_status> thread::tl_status = std::make_unique<thread::thread_status>();
+
+inline thread::thread_status::thread_status() noexcept
+	: main{ std::make_unique<thread>(co_active(), private_token) }
+	, current_active{ main.get() }
+{
+}
 
 inline thread_create_failure::thread_create_failure() noexcept
 	: thread_failure("Failed to create co::thread")
@@ -33,52 +39,14 @@ inline thread_return_failure::thread_return_failure() noexcept
 {
 }
 
-inline thread_ref active() noexcept
+inline const thread& active() noexcept
 {
-	return thread_ref(co_active());
-}
-
-template<typename T>
-inline cothread_t detail::thread_impl<T>::get_thread() const noexcept
-{
-	static_assert(std::is_base_of_v<thread_impl<T>, T>, "co::detail::thread_impl<T> is a CRTP class, T should inherit from co::detail::thread_impl<T>!");
-	return static_cast<const T*>(this)->get_thread();
-}
-
-inline cothread_t thread_ref::get_thread() const noexcept
-{
-	return m_thread;
+	return *thread::tl_status->current_active;
 }
 
 inline cothread_t thread::get_thread() const noexcept
 {
 	return *this ? m_thread.get() : nullptr;
-}
-
-inline thread::operator thread_ref() const noexcept
-{
-	return thread_ref(get_thread());
-}
-
-template<typename T>
-inline detail::thread_impl<T>::operator bool() const noexcept
-{
-	return get_thread() != nullptr;
-}
-
-inline thread_ref::thread_ref(cothread_t thread) noexcept
-	: m_thread{ thread }
-{
-}
-
-inline bool operator==(const thread_ref lhs, const thread_ref rhs) noexcept
-{
-	return lhs.m_thread == rhs.m_thread;
-}
-
-inline bool operator!=(const thread_ref lhs, const thread_ref rhs) noexcept
-{
-	return !(lhs == rhs);
 }
 
 inline size_t thread::get_stack_size() const noexcept
@@ -97,18 +65,18 @@ inline void thread::set_stack_size(size_t stack_size) noexcept
 	setup();
 }
 
-inline void thread::set_failure_thread(thread_ref failure_thread) noexcept
+inline void thread::set_parent(const thread& parent) noexcept
 {
-	assert(failure_thread);
-	m_failure_thread = failure_thread;
+	assert(parent);
+	m_parent = &parent;
 }
 
-inline thread_ref thread::get_failure_thread() const noexcept
+inline const thread& thread::get_parent() const noexcept
 {
-	return m_failure_thread;
+	return *m_parent;
 }
 
-inline void detail::thread_base::thread_deleter::operator()(cothread_t p) const noexcept
+inline void thread::thread_deleter::operator()(cothread_t p) const noexcept
 {
 	assert(p);
 	co_delete(p);
@@ -134,11 +102,11 @@ inline void thread::rewind()
 	setup();
 }
 
-template<typename T>
-inline void detail::thread_impl<T>::switch_to() const
+inline void thread::switch_to() const
 {
 	auto* thread = get_thread();
 	assert(thread != nullptr);
+	tl_status->current_active = this;
 	co_switch(thread);
 	// If the current thread variable is set while switch_to is called then it's the stop function that's issuing the call and the entry function stack has to be destroyed. Propagate an exception to achieve that.
  	if (tl_status->current_thread)
@@ -159,7 +127,7 @@ inline void thread::stop() const noexcept
 		return;
 	}
 	assert(tl_status->current_thread == nullptr);
-	tl_status->current_thread = co_active();
+	tl_status->current_thread = &active();
 	switch_to();
 }
 
@@ -168,8 +136,8 @@ inline thread::thread(size_t stack_size)
 {
 }
 
-inline thread::thread(thread_ref failure_thread, size_t stack_size)
-	: m_failure_thread{ failure_thread }
+inline thread::thread(const thread& parent, size_t stack_size)
+	: m_parent{ &parent }
 	, m_stack_size{ stack_size }
 {
 }
@@ -177,15 +145,25 @@ inline thread::thread(thread_ref failure_thread, size_t stack_size)
 inline thread::~thread()
 {
 	stop();
+	if (m_parent == nullptr)
+	{
+		m_thread.release(); // The main cothread has no owner.
+	}
 }
 
-inline thread::thread(thread::entry_t entry, thread_ref failure_thread)
-	: thread(std::move(entry), default_stack_size, failure_thread)
+inline thread::thread(cothread_t cothread, thread::private_token_t) noexcept
+	: m_thread{ cothread }
+	, m_active{ true }
 {
 }
 
-inline thread::thread(thread::entry_t entry, size_t stack_size, thread_ref failure_thread)
-	: m_failure_thread{ failure_thread }
+inline thread::thread(thread::entry_t entry, const thread& parent)
+	: thread(std::move(entry), default_stack_size, parent)
+{
+}
+
+inline thread::thread(thread::entry_t entry, size_t stack_size, const thread& parent)
+	: m_parent{ &parent }
 	, m_entry{ std::move(entry) }
 	, m_stack_size{ stack_size }
 {
@@ -198,7 +176,7 @@ inline void thread::setup()
 	assert(tl_status->current_thread == nullptr);
 	// Parameters to the true libco entry function have to be passed as "globals".
 	tl_status->current_this = this;
-	tl_status->current_thread = co_active();
+	tl_status->current_thread = &active();
 	if (!m_thread)
 	{
 		auto cothread = cothread_t{};
@@ -218,6 +196,7 @@ inline void thread::setup()
 		throw thread_create_failure();
 	}
 	// Handing execution over to the entry wrapper to let it store the parameters on its stack.
+	tl_status->current_active = this;
 	co_switch(m_thread.get());
 }
 
@@ -234,7 +213,7 @@ inline void thread::entry_wrapper() noexcept
 		assert(tl_status->current_thread != nullptr);
 		// Acquire parameters from setup
 		auto* self = std::exchange(tl_status->current_this, nullptr);
-		auto creating_thread = thread_ref(std::exchange(tl_status->current_thread, nullptr));
+		auto&& creating_thread = *std::exchange(tl_status->current_thread, nullptr);
 		self->m_active = true;
 		try
 		{
@@ -248,16 +227,18 @@ inline void thread::entry_wrapper() noexcept
 		catch (const thread_stopping&)
 		{
 			assert(tl_status->current_thread != nullptr);
-			auto* stopping_thread = std::exchange(tl_status->current_thread, nullptr);
+			auto&& stopping_thread = *std::exchange(tl_status->current_thread, nullptr);
 			self->m_active = false;
-			co_switch(stopping_thread); // Stop
+			tl_status->current_active = &stopping_thread;
+			co_switch(stopping_thread.get_thread()); // Stop
 		}
 		catch (...)
 		{
 			assert(tl_status->current_exception == nullptr);
 			tl_status->current_exception = std::current_exception();
 			self->m_active = false;
-			co_switch(self->m_failure_thread.get_thread()); // Failure
+			tl_status->current_active = self->m_parent;
+			co_switch(self->m_parent->get_thread()); // Failure
 		}
 	}
 }

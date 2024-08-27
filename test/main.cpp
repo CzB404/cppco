@@ -42,24 +42,21 @@ TEST_F(cppco, example)
 	// using namespace std;
 	auto cout = std::stringstream{};
 	using std::endl;
-	
-	// Remember the cothread to switch back to when done.
-	auto parent = co::active();
 
 	// Create the cothread.
-	auto cothread = co::thread([parent, &cout]() // [parent]()
+	auto cothread = co::thread([&]() // []()
 	{
 		// Printing on `cothread`
 		cout << "Hello World!" << endl;
 
-		// Switch back to `parent`.
-		parent.switch_to();
+		// Switch back to the parent.
+		co::active().get_parent().switch_to();
 	});
 
 	// Switch to `cothread`.
 	cothread.switch_to();
 
-	// Execution will resume here when `cothread` switches back to `parent`.
+	// Execution will resume here when `cothread` switches back to its parent.
 	EXPECT_EQ(cout.str(), "Hello World!\n"); // return 0;
 }
 
@@ -68,21 +65,19 @@ TEST_F(cppco, default_construct)
 	auto cothread = co::thread();
 	EXPECT_FALSE(cothread);
 	EXPECT_EQ(cothread.get_stack_size(), co::thread::default_stack_size);
-	EXPECT_EQ(cothread.get_failure_thread(), co::active());
+	EXPECT_EQ(&cothread.get_parent(), &co::active());
 }
 
 TEST_F(cppco, create_and_destroy)
 {
-	EXPECT_CALL(libco_mock::api::get(), active()).Times(3); // Default failure cothread is the current active cothread. + Constructor needs to initialize entry function and has to call back home. + Destructor kills the entry scope and also has to call back home.
 	EXPECT_CALL(libco_mock::api::get(), create(_, _));
 	EXPECT_CALL(libco_mock::api::get(), switch_to(_)).Times(4); // 2 in constructor, 2 in destructor
 	EXPECT_CALL(libco_mock::api::get(), delete_this(_));
-	auto cothread = co::thread([]() {});
+	co::thread cothread([]() {});
 }
 
 TEST_F(cppco, create_and_reset)
 {
-	EXPECT_CALL(libco_mock::api::get(), active()).Times(3);
 	EXPECT_CALL(libco_mock::api::get(), create(_, _));
 	EXPECT_CALL(libco_mock::api::get(), switch_to(_)).Times(4); // 2 in constructor, 2 in reset
 	EXPECT_CALL(libco_mock::api::get(), delete_this(_));
@@ -116,11 +111,10 @@ TEST_F(cppco, destructors)
 	};
 
 	{
-		EXPECT_CALL(libco_mock::api::get(), active()).Times(4); // active + constructor + default failure_thread + destructor
 		EXPECT_CALL(libco_mock::api::get(), create(_, _)).Times(1);
 		EXPECT_CALL(libco_mock::api::get(), switch_to(_)).Times(6); // 2 in main, 2 in constructor, 2 in reset
-		auto parent = co::active();
-		auto cothread = co::thread([parent, &destructed]()
+		auto& parent = co::active();
+		auto cothread = co::thread([&parent, &destructed]()
 		{
 			auto a = A(destructed);
 			parent.switch_to();
@@ -150,9 +144,9 @@ TEST_F(cppco, returning_entry)
 TEST_F(cppco, exception_for_other_cothread)
 {
 	struct Dummy {};
-	auto parent = co::active();
+	auto& parent = co::active();
 	bool caught = false;
-	auto fail_cothread = co::thread([parent, &caught]()
+	auto fail_cothread = co::thread([&parent, &caught]()
 	{
 		try
 		{
@@ -177,13 +171,13 @@ TEST_F(cppco, exception_for_other_cothread)
 TEST_F(cppco, exception_for_new_cothread)
 {
 	struct Dummy {};
-	auto parent = co::active();
+	auto& parent = co::active();
 	bool caught = false;
 	auto cothread = co::thread([]()
 		{
 			throw Dummy();
 		});
-	auto fail_cothread = co::thread([parent, &caught]()
+	auto fail_cothread = co::thread([&parent, &caught]()
 		{
 			try
 			{
@@ -195,7 +189,7 @@ TEST_F(cppco, exception_for_new_cothread)
 				parent.switch_to();
 			}
 		});
-	cothread.set_failure_thread(fail_cothread);
+	cothread.set_parent(fail_cothread);
 	fail_cothread.switch_to();
 	cothread.switch_to();
 	EXPECT_TRUE(caught);
@@ -203,7 +197,7 @@ TEST_F(cppco, exception_for_new_cothread)
 
 TEST_F(cppco, reset_entry)
 {
-	auto parent = co::active();
+	auto& parent = co::active();
 	auto cothread = co::thread([]() {});
 	bool run = false;
 	cothread.reset([&]()
@@ -219,7 +213,7 @@ TEST_F(cppco, rewind)
 {
 	bool a = false;
 	bool b = false;
-	auto parent = co::active();
+	auto& parent = co::active();
 	auto cothread = co::thread([&]()
 	{
 		a = true;
