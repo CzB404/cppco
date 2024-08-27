@@ -121,7 +121,7 @@ inline void thread::switch_to() const
 
 inline void thread::stop() const noexcept
 {
-	if (!*this)
+	if (!*this || m_parent == nullptr)
 	{
 		return;
 	}
