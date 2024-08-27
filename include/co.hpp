@@ -27,57 +27,139 @@ class thread_failure;
 class thread_create_failure;
 class thread_return_failure;
 
+/// `co::active()` returns the currently active `co::thread`.
+///
+/// It can also be used from the main cothread, which will return an instance
+/// that represents the main cothread but otherwise has no ownership of it.
 const thread& active() noexcept;
 
+/// `co::thread_failure` is the base exception of the `cppco` library.
 class thread_failure : public std::runtime_error
 {
 public:
 	using std::runtime_error::runtime_error;
 };
 
+/// `co::thread_create_failure` signals that a `co::thread` failed to initialize.
 class thread_create_failure : public thread_failure
 {
 public:
 	thread_create_failure() noexcept;
 };
+
+/// `co::thread_return_failure` signals that a `co::thread` tried to return.
 class thread_return_failure : public thread_failure
 {
 public:
 	thread_return_failure() noexcept;
 };
 
+/// `co::thread_stopping` is used to signal that the entry functor needs to exit as soon as possible.
+///
+/// Catching this exception is only permitted if it is rethrown in the same catch block.
+class thread_stopping
+{
+};
+
+/// `co::thread` is a class that represents and handles so-called "cothreads".
 class thread
 {
 public:
-	using entry_t = std::function<void()>;
-
-	// libco's recommendation for the default stack size is 1 MB on 32 bit systems, and to define the stack size in pointer size.
-	inline static constexpr size_t default_stack_size = 1 * 1024 * 1024 / 4 * sizeof(void*);
-
-	explicit operator bool() const noexcept;
-	void switch_to() const;
-	void reset();
-	void reset(entry_t entry);
-	void rewind();
-
 	friend const thread& active() noexcept;
 
+	/// `co::thread::entry_t` is the functor type for the entry functions for cothreads.
+	using entry_t = std::function<void()>;
+
+	/// The recommended size for the stack is 1 MB on 32 bit systems, and to define the stack size in pointer size.
+	///
+	/// Source: <https://github.com/higan-emu/libco/blob/9b76ff4c5c7680555d27c869ae90aa399d3cd0f2/doc/usage.md#co_create>
+	inline static constexpr size_t default_stack_size = 1 * 1024 * 1024 / 4 * sizeof(void*);
+
+	/// `co::thread` is considered to be running when the user supplied entry functor has been entered.
+	///
+	/// \return Boolean whether the `co::thread` is running (`true`) or not (`false`).
+	explicit operator bool() const noexcept;
+
+	/// Switches to this `co::thread`.
+	///
+	/// The previously active `co::thread` will resume from where it called this function.
+	void switch_to() const;
+
+	/// Releases all resources held by this `co::thread`.
+	///
+	/// Also stops the running entry functor.
+	void reset();
+
+	/// Sets a new entry functor.
+	///
+	/// Also stops the previous entry functor.
+	///
+	/// \param entry  The new entry functor for this `co::thread`.
+	void reset(entry_t entry);
+
+	/// Rewinds the entry functor's execution to its initial state.
+	void rewind();
+
+	/// Gets the stack size of this `co::thread`.
+	///
+	/// \return The current stack size.
 	size_t get_stack_size() const noexcept;
+	/// Sets the stack size of this `co::thread`.
+	/// 
+	/// Also stops the running entry functor, as there is no other way to change the stack size.
+	///
+	/// \param stack_size  The new stack size.
 	void set_stack_size(size_t stack_size) noexcept;
 
-	void set_parent(const thread& parent) noexcept;
+	/// Gets the parent `co::thread` of this `co::thread`.
+	///
+	/// It is undefined behavior to get the parent of the main cothread.
+	/// 
+	/// \return The parent `co::thread` of this `co::thread`.
 	const thread& get_parent() const noexcept;
+	/// Sets the parent `co::thread` of this `co::thread`.
+	///
+	/// \param parent The new parent for this `co::thread`.
+	void set_parent(const thread& parent) noexcept;
 
+	/// Constructs an empty `co::thread`.
+	///
+	/// It will need an entry functor assigned to it via `reset(entry_t entry)`.
+	/// The parent is set to be the calling `co::thread`.
+	///
+	/// \param stack_size The stack size. Defaults to `co::thread::default_stack_size`.
 	explicit thread(size_t stack_size = default_stack_size);
+	/// Constructs an empty `co::thread`.
+	///
+	/// It will need an entry functor assigned to it via `reset(entry_t entry)`.
+	///
+	/// \param parent      The explicitly specified parent for this `co::thread`.
+	/// \param stack_size  The stack size. Defaults to `co::thread::default_stack_size`.
 	explicit thread(const thread& parent, size_t stack_size = default_stack_size);
+
+	/// Constructs a `co::thread` with `entry` as its entry functor.
+	/// 
+	/// The stack size will be `co::thread::default_stack_size`.
+	///
+	/// \param entry   The entry functor that will begin execution when the `co::thread` starts running.
+	/// \param parent  The explicitly specified parent for this `co::thread`. Defaults to the calling `co::thread`.
 	explicit thread(entry_t entry, const thread& parent = active());
+	/// Constructs a `co::thread` with `entry` as its entry functor.
+	///
+	/// \param entry       The entry functor that will begin execution when the `co::thread` starts running.
+	/// \param stack_size  The stack size.
+	/// \param parent      The explicitly specified parent for this `co::thread`. Defaults to the calling `co::thread`.
 	explicit thread(entry_t entry, size_t stack_size, const thread& parent = active());
 
-	thread(const thread& other) = delete;
+	/// Move constructor.
 	thread(thread&& other) noexcept;
-	thread& operator=(const thread& other) = delete;
+	/// Move assignment operator.
 	thread& operator=(thread&& other) noexcept;
+	/// Destructor.
 	~thread();
+
+	thread(const thread& other) = delete;
+	thread& operator=(const thread& other) = delete;
 
 private:
 	class private_token_t {};
@@ -86,9 +168,6 @@ public:
 	explicit thread(cothread_t cothread, private_token_t) noexcept;
 
 private:
-	class thread_stopping : public std::exception
-	{
-	};
 
 	struct thread_deleter
 	{
