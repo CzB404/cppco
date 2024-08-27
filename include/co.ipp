@@ -159,7 +159,7 @@ inline thread::~thread()
 	}
 }
 
-thread::thread(thread&& other) noexcept
+inline thread::thread(thread&& other) noexcept
 	: m_thread{ std::move(other.m_thread) }
 	, m_parent{ std::exchange(other.m_parent, &co::active()) }
 	, m_entry{ std::move(other.m_entry) }
@@ -168,7 +168,7 @@ thread::thread(thread&& other) noexcept
 {
 }
 
-thread& thread::operator=(thread&& other) noexcept
+inline thread& thread::operator=(thread&& other) noexcept
 {
 	m_thread = std::move(other.m_thread);
 	m_parent = std::exchange(other.m_parent, &co::active());

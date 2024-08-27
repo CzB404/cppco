@@ -12,6 +12,7 @@
 // TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 // THIS SOFTWARE.
 
+#include "fixture.hpp"
 #include "libco_mock.hpp"
 #include <sstream>
 #include <co.hpp>
@@ -19,46 +20,6 @@
 #include <gmock/gmock.h>
 
 namespace cppco_test {
-
-using namespace ::testing;
-
-class cppco : public ::testing::Test
-{
-	using Base = ::testing::Test;
-public:
-	virtual void SetUp() override
-	{
-		Base::SetUp();
-	}
-	virtual void TearDown() override
-	{
-		libco_mock::api::verify();
-		Base::TearDown();
-	}
-};
-
-TEST_F(cppco, example)
-{
-	// using namespace std;
-	auto cout = std::stringstream{};
-	using std::endl;
-
-	// Create the cothread.
-	auto cothread = co::thread([&]() // []()
-	{
-		// Printing on `cothread`
-		cout << "Hello World!" << endl;
-
-		// Switch back to the parent.
-		co::active().get_parent().switch_to();
-	});
-
-	// Switch to `cothread`.
-	cothread.switch_to();
-
-	// Execution will resume here when `cothread` switches back to its parent.
-	EXPECT_EQ(cout.str(), "Hello World!\n"); // return 0;
-}
 
 TEST_F(cppco, default_construct)
 {
