@@ -4,11 +4,16 @@
 
 cothread_t parent;
 
+void will_throw()
+{
+	throw std::runtime_error("Catch me!");
+}
+
 void entry()
 {
 	try
 	{
-		throw std::runtime_error("Catch me!");
+		will_throw();
 	}
 	catch (const std::exception& e)
 	{
