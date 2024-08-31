@@ -21,7 +21,7 @@ option(CPPCO_USE_INTERNAL_LIBCO "Use the `libco` library bundled with `cppco`" O
 
 if (CPPCO_USE_INTERNAL_LIBCO)
 	if (MSVC)
-		set(LIBCO_FORCE_FALLBACK ON CACHE BOOL "`cppco` uses exceptions to correctly handle object lifetimes, but libco's default configuration has a bug that causes exceptions to not be caught in Windows builds.")
+		set(LIBCO_MPROTECT ON CACHE BOOL "At the time of writing `libco` does not compile without this on MSVC.")
 	endif(MSVC)
 	add_subdirectory(thirdparty/libco_cmake)
 endif (CPPCO_USE_INTERNAL_LIBCO)
