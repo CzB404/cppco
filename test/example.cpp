@@ -23,25 +23,25 @@ namespace cppco_test {
 
 TEST_F(cppco, example)
 {
-	// using namespace std;
-	auto cout = std::stringstream{};
-	using std::endl;
+    // using namespace std;
+    auto cout = std::stringstream{};
+    using std::endl;
 
-	// Create the cothread.
-	auto cothread = co::thread([&]() // []()
-	{
-		// Printing on `cothread`
-		cout << "Hello World!" << endl;
+    // Create the cothread.
+    auto cothread = co::thread([&]() // []()
+    {
+        // Printing on `cothread`
+        cout << "Hello World!" << endl;
 
-		// Switch back to the parent.
-		co::active().get_parent().switch_to();
-	});
+        // Switch back to the parent.
+        co::active().get_parent().switch_to();
+    });
 
-	// Switch to `cothread`.
-	cothread.switch_to();
+    // Switch to `cothread`.
+    cothread.switch_to();
 
-	// Execution will resume here when `cothread` switches back to its parent.
-	EXPECT_EQ(cout.str(), "Hello World!\n"); // return 0;
+    // Execution will resume here when `cothread` switches back to its parent.
+    EXPECT_EQ(cout.str(), "Hello World!\n"); // return 0;
 }
 
 } // namespace cppco_test

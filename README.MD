@@ -1,7 +1,7 @@
 `cppco`
 =======
 
-`cppco` is a C++ wrapper library for the cooperative multithreading C library
+`cppco` is a C++11 wrapper library for the cooperative multithreading C library
 [`libco`](https://github.com/higan-emu/libco), originally written by
 [Byuu](https://en.wikipedia.org/wiki/Near_(programmer)) for
 [higan](https://github.com/higan-emu/higan).
@@ -32,23 +32,23 @@ The simplest "Hello World!" program using `cppco` is the following:
 
 int main()
 {
-	using namespace std;
+    using namespace std;
 
-	// Create the cothread.
-	auto cothread = co::thread([]()
-	{
-		// Printing on `cothread`
-		cout << "Hello World!" << endl;
+    // Create the cothread.
+    auto cothread = co::thread([]()
+    {
+        // Printing on `cothread`
+        cout << "Hello World!" << endl;
 
-		// Switch back to the parent.
-		co::active().get_parent().switch_to();
-	});
+        // Switch back to the parent.
+        co::active().get_parent().switch_to();
+    });
 
-	// Switch to `cothread`.
-	cothread.switch_to();
+    // Switch to `cothread`.
+    cothread.switch_to();
 
-	// Execution will resume here when `cothread` switches back to its parent.
-	return 0;
+    // Execution will resume here when `cothread` switches back to its parent.
+    return 0;
 }
 ```
 

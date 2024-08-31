@@ -88,7 +88,7 @@ public:
 	/// The recommended size for the stack is 1 MB on 32 bit systems, and to define the stack size in pointer size.
 	///
 	/// Source: <https://github.com/higan-emu/libco/blob/9b76ff4c5c7680555d27c869ae90aa399d3cd0f2/doc/usage.md#co_create>
-	inline static constexpr size_t default_stack_size = 1 * 1024 * 1024 / 4 * sizeof(void*);
+	static constexpr size_t default_stack_size = 1 * 1024 * 1024 / 4 * sizeof(void*);
 
 	/// `co::thread` is considered to be running when the user supplied entry functor has been entered.
 	///
@@ -178,7 +178,7 @@ public:
 
 private:
 	class private_token_t {};
-	inline static constexpr private_token_t private_token{};
+	static constexpr private_token_t private_token{};
 public:
 	explicit thread(cothread_t cothread, private_token_t) noexcept;
 

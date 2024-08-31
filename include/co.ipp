@@ -21,6 +21,11 @@
 
 namespace co {
 
+#ifdef __GNUC__
+constexpr size_t thread::default_stack_size __attribute__((weak));
+constexpr thread::private_token_t thread::private_token __attribute__((weak));
+#endif // __GNUC__
+
 #ifndef CPPCO_CUSTOM_STATUS
 inline thread::thread_status& thread::status()
 {
