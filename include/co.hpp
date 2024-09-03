@@ -31,6 +31,7 @@
 #define CO_HPP_INCLUDE_GUARD
 
 #include <libco.h>
+#include <stdexcept>
 #include <memory>
 #include <functional>
 

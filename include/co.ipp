@@ -15,8 +15,6 @@
 #ifndef CO_IPP_INCLUDE_GUARD
 #define CO_IPP_INCLUDE_GUARD
 
-#include <stdexcept>
-#include <type_traits>
 #include <cassert>
 
 namespace co {
