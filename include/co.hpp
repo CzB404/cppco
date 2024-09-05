@@ -49,6 +49,22 @@ class thread_return_failure;
 /// that represents the main cothread but otherwise has no ownership of it.
 const thread& active() noexcept;
 
+/// `co::set_active_as_main()` sets the currently active `co::thread` as the main cothread.
+///
+/// > This function is for advanced usage. Unnecessary calls to this function will result in resource leaks and
+/// > crashes.
+///
+/// This is function is useful when `cppco` is not the only wrapper around `libco`.
+///
+/// `cppco` keeps track of the currently active cothread itself in order to implement the parent-child relation between
+/// cothreads. This bookkeeping could get out of sync when there are calls to `libco` in the application that are not
+/// from `cppco`.
+/// 
+/// If this bookkeeping is not synchronized then this function resynchronizes it but it also overwrites the previous
+/// main `co::thread`. It is considered undefined behavior if a `co::thread` is still referring to the old main cothread
+/// as its parent and execution is switched to that `co::thread`.
+void set_active_as_main() noexcept;
+
 /// `co::thread_failure` is the base exception of the `cppco` library.
 class thread_failure : public std::runtime_error
 {
@@ -82,6 +98,7 @@ class thread
 {
 public:
 	friend const thread& active() noexcept;
+	friend void set_active_as_main() noexcept;
 
 	/// `co::thread::entry_t` is the functor type for the entry functions for cothreads.
 	using entry_t = std::function<void()>;

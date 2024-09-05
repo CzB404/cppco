@@ -50,7 +50,19 @@ inline thread_return_failure::thread_return_failure() noexcept
 
 inline const thread& active() noexcept
 {
+	assert(thread::status().current_active->get_thread() == co_active());
 	return *thread::status().current_active;
+}
+
+inline void set_active_as_main() noexcept
+{
+	if (thread::status().current_active->get_thread() == co_active())
+	{
+		return;
+	}
+	auto&& status = thread::status();
+	status.main = std::make_unique<thread>(co_active(), thread::private_token);
+	status.current_active = status.main.get();
 }
 
 inline cothread_t thread::get_thread() const noexcept
@@ -113,10 +125,7 @@ inline void thread::rewind()
 inline void thread::switch_to() const
 {
 	auto* thread = get_thread();
-	if (thread == nullptr)
-	{
-
-	}
+	assert(thread != nullptr);
 	status().current_active = this;
 	co_switch(thread);
 	// If the current thread variable is set while switch_to is called then it's the stop function that's issuing the call and the entry function stack has to be destroyed. Propagate an exception to achieve that.

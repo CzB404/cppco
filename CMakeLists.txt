@@ -49,8 +49,15 @@ if(CPPCO_TEST)
 	endif (MSVC)
 	set(INSTALL_GTEST OFF CACHE BOOL "Do not install GTest")
 	add_subdirectory(thirdparty/googletest)
-	add_executable(test_cppco test/example.cpp test/test.cpp test/libco_mock.hpp test/fixture.hpp)
+	add_executable(test_cppco
+		test/example.cpp
+		test/test.cpp
+		test/libco_mock.hpp
+		test/fixture.hpp
+		test/fixture.cpp
+	)
 	target_link_libraries(test_cppco PRIVATE cppco gmock_main)
+	target_compile_definitions(test_cppco PRIVATE CPPCO_CUSTOM_STATUS)
 	set_property(TARGET test_cppco PROPERTY CXX_STANDARD_REQUIRED ON)
 	set_property(TARGET test_cppco PROPERTY CXX_STANDARD 11)
 	set_property(TARGET test_cppco PROPERTY CXX_EXTENSIONS OFF)
