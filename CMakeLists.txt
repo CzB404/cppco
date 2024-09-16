@@ -14,12 +14,9 @@
 
 cmake_minimum_required(VERSION 3.10)
 
-# Enable newer project structure
-if(${CMAKE_VERSION} VERSION_GREATER_EQUAL ${CMAKE_MINIMUM_REQUIRED_VERSION})
-	cmake_minimum_required(VERSION ${CMAKE_VERSION})
-endif(${CMAKE_VERSION} VERSION_GREATER_EQUAL ${CMAKE_MINIMUM_REQUIRED_VERSION})
-
 project(cppco)
+
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 option(CPPCO_TEST "Build tests" OFF)
 option(CPPCO_USE_INTERNAL_LIBCO "Use the `libco` library bundled with `cppco`" ON)
@@ -29,6 +26,7 @@ if (CPPCO_USE_INTERNAL_LIBCO)
 		set(LIBCO_FORCE_FALLBACK ON CACHE BOOL "`cppco` uses exceptions to correctly handle object lifetimes, but libco's default configuration has a bug that causes exceptions to not be caught in Windows builds.")
 	endif(MSVC)
 	add_subdirectory(thirdparty/libco_cmake)
+	set_property(TARGET libco PROPERTY FOLDER "thirdparty")
 endif (CPPCO_USE_INTERNAL_LIBCO)
 
 set(CPPCO_HDRS ${CMAKE_CURRENT_LIST_DIR}/include/co.hpp ${CMAKE_CURRENT_LIST_DIR}/include/co.ipp)
@@ -54,6 +52,10 @@ if(CPPCO_TEST)
 	endif (MSVC)
 	set(INSTALL_GTEST OFF CACHE BOOL "Do not install GTest")
 	add_subdirectory(thirdparty/googletest)
+	set_property(TARGET gtest PROPERTY FOLDER "thirdparty/googletest")
+	set_property(TARGET gmock PROPERTY FOLDER "thirdparty/googletest")
+	set_property(TARGET gtest_main PROPERTY FOLDER "thirdparty/googletest")
+	set_property(TARGET gmock_main PROPERTY FOLDER "thirdparty/googletest")
 
 	function(make_test TARGET_NAME)
 		add_executable(${TARGET_NAME}

@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Added
+
+- Compile option `CPPCO_LIBCO_INTEROP` to facilitate interoperation with `libco` calls not made by this library.
+- `co::main` to get the main cothread.
+
+### Changed
+
+### Removed
+
 ## [0.1.2] - 2024-09-05
 
 ### Added
