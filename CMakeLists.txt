@@ -57,34 +57,48 @@ if(CPPCO_TEST)
 	set_property(TARGET gtest_main PROPERTY FOLDER "thirdparty/googletest")
 	set_property(TARGET gmock_main PROPERTY FOLDER "thirdparty/googletest")
 
-	function(make_test TARGET_NAME)
-		add_executable(${TARGET_NAME}
+	set(TEST_SOURCES 
 			test/example.cpp
 			test/test.cpp
 			test/libco_mock.hpp
 			test/fixture.hpp
 			test/fixture.cpp
+	)
+
+	function(make_test)
+		set(options INTEROP CUSTOM_STATUS)
+		set(oneValueArgs TARGET_NAME)
+		set(multiValueArgs SOURCES)
+		cmake_parse_arguments(MAKE_TEST "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
+		add_executable(${MAKE_TEST_TARGET_NAME}
+			${MAKE_TEST_SOURCES}
 		)
-		target_link_libraries(${TARGET_NAME} PRIVATE cppco gmock_main)
-		target_compile_definitions(${TARGET_NAME} PRIVATE CPPCO_CUSTOM_STATUS)
-		set_property(TARGET ${TARGET_NAME} PROPERTY CXX_STANDARD_REQUIRED ON)
-		set_property(TARGET ${TARGET_NAME} PROPERTY CXX_STANDARD 11)
-		set_property(TARGET ${TARGET_NAME} PROPERTY CXX_EXTENSIONS OFF)
+		target_link_libraries(${MAKE_TEST_TARGET_NAME} PRIVATE cppco gmock_main)
+		if(MAKE_TEST_CUSTOM_STATUS)
+			target_compile_definitions(${MAKE_TEST_TARGET_NAME} PRIVATE CPPCO_CUSTOM_STATUS)
+		endif(MAKE_TEST_CUSTOM_STATUS)
+		if(MAKE_TEST_INTEROP)
+			target_compile_definitions(test_cppco_libco_interop PRIVATE CPPCO_LIBCO_INTEROP)
+		endif(MAKE_TEST_INTEROP)
+		set_property(TARGET ${MAKE_TEST_TARGET_NAME} PROPERTY CXX_STANDARD_REQUIRED ON)
+		set_property(TARGET ${MAKE_TEST_TARGET_NAME} PROPERTY CXX_STANDARD 11)
+		set_property(TARGET ${MAKE_TEST_TARGET_NAME} PROPERTY CXX_EXTENSIONS OFF)
 		if(MSVC)
-			target_compile_options(${TARGET_NAME} PRIVATE /W4 /WX /permissive- $<$<CONFIG:DEBUG>:/ZI>)
-			target_link_options(${TARGET_NAME} PRIVATE $<$<CONFIG:DEBUG>:/INCREMENTAL>)
+			target_compile_options(${MAKE_TEST_TARGET_NAME} PRIVATE /W4 /WX /permissive- $<$<CONFIG:DEBUG>:/ZI>)
+			target_link_options(${MAKE_TEST_TARGET_NAME} PRIVATE $<$<CONFIG:DEBUG>:/INCREMENTAL>)
 		else(MSVC)
-			target_compile_options(${TARGET_NAME} PRIVATE -Wall -Wextra -Werror -pedantic -pedantic-errors)
+			target_compile_options(${MAKE_TEST_TARGET_NAME} PRIVATE -Wall -Wextra -Werror -pedantic -pedantic-errors)
 		endif(MSVC)
 		if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-			target_compile_options(${TARGET_NAME} PRIVATE -Wno-c++17-attribute-extensions)
+			target_compile_options(${MAKE_TEST_TARGET_NAME} PRIVATE -Wno-c++17-attribute-extensions)
 		endif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-		add_test(NAME ${TARGET_NAME} COMMAND ${TARGET_NAME})
+		add_test(NAME ${MAKE_TEST_TARGET_NAME} COMMAND ${MAKE_TEST_TARGET_NAME})
 	endfunction(make_test)
 
-	make_test(test_cppco)
-	make_test(test_cppco_libco_interop)
-	target_compile_definitions(test_cppco_libco_interop PRIVATE CPPCO_LIBCO_INTEROP)
+	make_test(TARGET_NAME test_cppco SOURCES ${TEST_SOURCES} CUSTOM_STATUS)
+	make_test(TARGET_NAME test_cppco_libco_interop SOURCES ${TEST_SOURCES} CUSTOM_STATUS INTEROP)
+	make_test(TARGET_NAME test_cppco_compile SOURCES test/compile.cpp)
+	make_test(TARGET_NAME test_cppco_compile_libco_interop SOURCES test/compile.cpp INTEROP)
 
 	set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT test_cppco)
 

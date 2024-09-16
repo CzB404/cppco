@@ -15,11 +15,11 @@
 #ifndef CPPCO_TEST_FIXTURE_HPP_INCLUDE_GUARD
 #define CPPCO_TEST_FIXTURE_HPP_INCLUDE_GUARD
 
+#include "libco_mock.hpp"
+#include <co.hpp>
 #include <map>
 #include <thread>
 #include <memory>
-#include "libco_mock.hpp"
-#include <co.hpp>
 
 namespace cppco_test {
 

@@ -12,10 +12,10 @@
 // TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF
 // THIS SOFTWARE.
 
-#include "fixture.hpp"
 #include "libco_mock.hpp"
-#include <sstream>
 #include <co.hpp>
+#include "fixture.hpp"
+#include <sstream>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
