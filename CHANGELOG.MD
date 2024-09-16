@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Test build now uses CMake Folders to organize targets
+
 ### Removed
 
 ## [0.1.2] - 2024-09-05
