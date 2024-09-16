@@ -15,17 +15,20 @@
 /// \file co.hpp
 /// `co.hpp` is the main header file for `cppco`.
 ///
-/// `cppco` has customization macros that affect the behavior of the code
-/// defined in this file.
+/// `cppco` has customization macros that affect the behavior of the code defined in this file.
 /// 
-/// - `CPPCO_CUSTOM_STATUS`: If defined the private static function definition
-///   `thread::thread_status& thread::status()` will be omitted. This is useful
-///   for clients that want to handle `thread_local` storage directly. The
-///   custom status function may only call the constructor of
-///   `thread::thread_status` and has to keep it alive throughout the runtime of
-///   the application.
-/// - `CPPCO_FLB_LIBCO`: If defined then the three argument `co_create` function
-///   will be used as it is defined in the `libco`'s `flb_libco` fork.
+/// - `CPPCO_CUSTOM_STATUS`: If defined the private static function definition `thread::thread_status& thread::status()`
+///   will be omitted. This is useful for clients that want to handle `thread_local` storage directly. The custom status
+///   function may only call the constructor of `thread::thread_status` and has to keep it alive throughout the runtime
+///   of the application.
+///
+/// - `CPPCO_FLB_LIBCO`: If defined then the three argument `co_create` function will be used as it is defined in the
+///   `libco`'s `flb_libco` fork.
+///
+/// - `CPPCO_LIBCO_INTEROP`: Adds additional code to `cppco` that facilitates interoperation with raw `libco` calls.
+///   Ideally all calls to `libco` would be performed through `cppco`. However, if that is not possible, then `cppco`
+///   needs to be aware of external cothreads and to keep track of the ones encountered via calls to `co::active()`.
+///   
 
 #ifndef CO_HPP_INCLUDE_GUARD
 #define CO_HPP_INCLUDE_GUARD
@@ -34,6 +37,10 @@
 #include <stdexcept>
 #include <memory>
 #include <functional>
+#ifdef CPPCO_LIBCO_INTEROP
+#include <map>
+#include <mutex>
+#endif // CPPCO_LIBCO_INTEROP
 
 namespace co {
 
@@ -48,6 +55,25 @@ class thread_return_failure;
 /// It can also be used from the main cothread, which will return an instance
 /// that represents the main cothread but otherwise has no ownership of it.
 const thread& active() noexcept;
+
+/// `co::main()` returns the main cothread.
+const thread& main() noexcept;
+
+#ifdef CPPCO_LIBCO_INTEROP
+/// `co::init()` manually initializes the internals of the `cppco` library.
+///
+/// The internals of the `cppco` library are normally initialized on the first call to any function on the API. However,
+/// if `cppco` is not handling all `libco` calls then the first call to a `cppco` method might not happen on the main
+/// cothread.
+///
+/// This function can be used to ensure the correct initialization of `cppco` by invoking it on the main cothread.
+void init() noexcept;
+
+/// `co::clear_external()` clears the tracked external cothreads from `cppco`'s cache.
+///
+/// Use with care. This could cause `co::thread`s' parent reference to become dangling. Make sure no `co::thread` is
+/// referring to such parents when calling `switch_to` otherwise the behavior becomes undefined.
+void clear_external() noexcept;
 
 /// `co::set_active_as_main()` sets the currently active `co::thread` as the main cothread.
 ///
@@ -64,6 +90,7 @@ const thread& active() noexcept;
 /// main `co::thread`. It is considered undefined behavior if a `co::thread` is still referring to the old main cothread
 /// as its parent and execution is switched to that `co::thread`.
 void set_active_as_main() noexcept;
+#endif // CPPCO_LIBCO_INTEROP
 
 /// `co::thread_failure` is the base exception of the `cppco` library.
 class thread_failure : public std::runtime_error
@@ -97,8 +124,13 @@ class thread_stopping
 class thread
 {
 public:
-	friend const thread& active() noexcept;
+#ifdef CPPCO_LIBCO_INTEROP
+	friend void init() noexcept;
 	friend void set_active_as_main() noexcept;
+	friend void clear_external() noexcept;
+#endif // CPPCO_LIBCO_INTEROP
+	friend const thread& active() noexcept;
+	friend const thread& main() noexcept;
 
 	/// `co::thread::entry_t` is the functor type for the entry functions for cothreads.
 	using entry_t = std::function<void()>;
@@ -201,21 +233,12 @@ public:
 	explicit thread(cothread_t cothread, private_token_t) noexcept;
 
 private:
-
 	struct thread_deleter
 	{
 		void operator()(cothread_t p) const noexcept;
 	};
 
-	struct thread_status
-	{
-		std::unique_ptr<thread> main;
-		const thread* current_active = nullptr;
-		const thread* current_thread = nullptr;
-		std::exception_ptr current_exception;
-
-		thread_status() noexcept;
-	};
+	struct thread_status;
 
 	void setup();
 	static void entry_wrapper() noexcept;
@@ -233,6 +256,43 @@ private:
 	size_t m_stack_size = 0;
 	mutable bool m_active = false;
 };
+
+struct thread::thread_status
+{
+	thread main;
+	const thread* current_active = nullptr;
+	const thread* current_thread = nullptr;
+	std::exception_ptr current_exception;
+
+	thread_status() noexcept;
+
+#ifdef CPPCO_LIBCO_INTEROP
+	struct thread_order;
+	struct registry;
+
+	static registry& get_registry();
+#endif // CPPCO_LIBCO_INTEROP
+};
+
+
+#ifdef CPPCO_LIBCO_INTEROP
+struct thread::thread_status::thread_order
+{
+	bool operator()(const thread& lhs, const thread& rhs) const noexcept;
+};
+
+struct thread::thread_status::registry
+{
+	std::recursive_mutex mutex;
+	std::map<cothread_t, thread*> data;
+	std::set<thread, thread_order> external;
+
+	thread* find(cothread_t cothread) noexcept;
+	void insert(cothread_t cothread, thread* pthread) noexcept;
+	void exchange(cothread_t cothread, thread* pthread) noexcept;
+	void erase(cothread_t cothread) noexcept;
+};
+#endif // CPPCO_LIBCO_INTEROP
 
 } // namespace co
 

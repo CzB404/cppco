@@ -14,6 +14,11 @@
 
 cmake_minimum_required(VERSION 3.10)
 
+# Enable newer project structure
+if(${CMAKE_VERSION} VERSION_GREATER_EQUAL ${CMAKE_MINIMUM_REQUIRED_VERSION})
+	cmake_minimum_required(VERSION ${CMAKE_VERSION})
+endif(${CMAKE_VERSION} VERSION_GREATER_EQUAL ${CMAKE_MINIMUM_REQUIRED_VERSION})
+
 project(cppco)
 
 option(CPPCO_TEST "Build tests" OFF)
@@ -27,12 +32,12 @@ if (CPPCO_USE_INTERNAL_LIBCO)
 endif (CPPCO_USE_INTERNAL_LIBCO)
 
 set(CPPCO_HDRS ${CMAKE_CURRENT_LIST_DIR}/include/co.hpp ${CMAKE_CURRENT_LIST_DIR}/include/co.ipp)
-if (CMAKE_VERSION VERSION_GREATER_EQUAL 3.19)
+if (${CMAKE_VERSION} VERSION_GREATER_EQUAL 3.19)
 	add_library(cppco INTERFACE ${CPPCO_HDRS})
-else (CMAKE_VERSION VERSION_GREATER_EQUAL 3.19)
+else (${CMAKE_VERSION} VERSION_GREATER_EQUAL 3.19)
 	add_library(cppco INTERFACE)
 	target_sources(cppco INTERFACE ${CPPCO_HDRS})
-endif (CMAKE_VERSION VERSION_GREATER_EQUAL 3.19)
+endif (${CMAKE_VERSION} VERSION_GREATER_EQUAL 3.19)
 source_group(TREE ${CMAKE_CURRENT_LIST_DIR} PREFIX "Header Files" FILES ${CPPCO_HDRS})
 set_source_files_properties(${CPPCO_HDRS} PROPERTIES HEADER_FILE_ONLY ON)
 if (CPPCO_USE_INTERNAL_LIBCO)
@@ -49,27 +54,36 @@ if(CPPCO_TEST)
 	endif (MSVC)
 	set(INSTALL_GTEST OFF CACHE BOOL "Do not install GTest")
 	add_subdirectory(thirdparty/googletest)
-	add_executable(test_cppco
-		test/example.cpp
-		test/test.cpp
-		test/libco_mock.hpp
-		test/fixture.hpp
-		test/fixture.cpp
-	)
-	target_link_libraries(test_cppco PRIVATE cppco gmock_main)
-	target_compile_definitions(test_cppco PRIVATE CPPCO_CUSTOM_STATUS)
-	set_property(TARGET test_cppco PROPERTY CXX_STANDARD_REQUIRED ON)
-	set_property(TARGET test_cppco PROPERTY CXX_STANDARD 11)
-	set_property(TARGET test_cppco PROPERTY CXX_EXTENSIONS OFF)
+
+	function(make_test TARGET_NAME)
+		add_executable(${TARGET_NAME}
+			test/example.cpp
+			test/test.cpp
+			test/libco_mock.hpp
+			test/fixture.hpp
+			test/fixture.cpp
+		)
+		target_link_libraries(${TARGET_NAME} PRIVATE cppco gmock_main)
+		target_compile_definitions(${TARGET_NAME} PRIVATE CPPCO_CUSTOM_STATUS)
+		set_property(TARGET ${TARGET_NAME} PROPERTY CXX_STANDARD_REQUIRED ON)
+		set_property(TARGET ${TARGET_NAME} PROPERTY CXX_STANDARD 11)
+		set_property(TARGET ${TARGET_NAME} PROPERTY CXX_EXTENSIONS OFF)
+		if(MSVC)
+			target_compile_options(${TARGET_NAME} PRIVATE /W4 /WX /permissive- $<$<CONFIG:DEBUG>:/ZI>)
+			target_link_options(${TARGET_NAME} PRIVATE $<$<CONFIG:DEBUG>:/INCREMENTAL>)
+		else(MSVC)
+			target_compile_options(${TARGET_NAME} PRIVATE -Wall -Wextra -Werror -pedantic -pedantic-errors)
+		endif(MSVC)
+		if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+			target_compile_options(${TARGET_NAME} PRIVATE -Wno-c++17-attribute-extensions)
+		endif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
+		add_test(NAME ${TARGET_NAME} COMMAND ${TARGET_NAME})
+	endfunction(make_test)
+
+	make_test(test_cppco)
+	make_test(test_cppco_libco_interop)
+	target_compile_definitions(test_cppco_libco_interop PRIVATE CPPCO_LIBCO_INTEROP)
+
 	set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT test_cppco)
-	if(MSVC)
-		target_compile_options(test_cppco PRIVATE /W4 /WX /permissive- $<$<CONFIG:DEBUG>:/ZI>)
-		target_link_options(test_cppco PRIVATE $<$<CONFIG:DEBUG>:/INCREMENTAL>)
-	else(MSVC)
-		target_compile_options(test_cppco PRIVATE -Wall -Wextra -Werror -pedantic -pedantic-errors)
-	endif(MSVC)
-	if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-		target_compile_options(test_cppco PRIVATE -Wno-c++17-attribute-extensions)
-	endif (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
-	add_test(NAME test_cppco COMMAND test_cppco)
+
 endif(CPPCO_TEST)

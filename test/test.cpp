@@ -284,8 +284,11 @@ TEST_F(cppco, set_stack_size_when_active)
 	EXPECT_EQ(cothread.get_stack_size(), 2 * co::thread::default_stack_size);
 }
 
-TEST_F(cppco, set_active_as_main)
+#ifdef CPPCO_LIBCO_INTEROP
+TEST_F(cppco, libco_interop)
 {
+	co::init();
+
 	struct cothread_deleter
 	{
 		void operator()(cothread_t p) const noexcept
@@ -300,23 +303,23 @@ TEST_F(cppco, set_active_as_main)
 
 	static cothread_t parent = co_active();
 
-	static auto* pcothread = static_cast<co::thread*>(nullptr);
+	static auto* pcothread = static_cast<std::unique_ptr<co::thread>*>(nullptr);
 
 	auto ccothread = std::unique_ptr<void, cothread_deleter>(co_create(static_cast<int>(co::thread::default_stack_size), +[]()
 	{
 		a = true;
-		co::set_active_as_main();
-		pcothread->set_parent(co::active());
-		pcothread->switch_to();
+		*pcothread = std::make_unique<co::thread>([]()
+		{
+			b = true;
+			co::active().get_parent().switch_to();
+		});
+		(*pcothread)->switch_to();
 		c = true;
 		co_switch(parent);
 	}));
 
-	auto cothread = co::thread([]()
-	{
-		b = true;
-		co::active().get_parent().switch_to();
-	});
+	// Avoid calling `co::thread` constructor on purpose to test `co::init()` with `co::active() == co::main()` later.
+	auto cothread = std::unique_ptr<co::thread>();
 
 	pcothread = &cothread;
 
@@ -325,8 +328,10 @@ TEST_F(cppco, set_active_as_main)
 	EXPECT_TRUE(b);
 	EXPECT_TRUE(c);
 
-	// Ensure safe destruction
-	co::set_active_as_main();
+	EXPECT_EQ(&co::active(), &co::main());
+
+	co::clear_external();
 }
+#endif // CPPCO_LIBCO_INTEROP
 
 } // namespace cppco_test
