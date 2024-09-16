@@ -85,6 +85,7 @@ inline void thread::thread_status::registry::insert(cothread_t cothread, thread*
 	}
 	std::lock_guard<std::recursive_mutex> guard(mutex);
 	auto success = data.insert(std::make_pair(cothread, pthread));
+	static_cast<void>(success); // Suppress unused variable warning because `assert` does not.
 	assert(success.second == true);
 }
 
@@ -108,6 +109,7 @@ inline void thread::thread_status::registry::erase(cothread_t cothread) noexcept
 	}
 	std::lock_guard<std::recursive_mutex> guard(mutex);
 	auto count = data.erase(cothread);
+	static_cast<void>(count); // Suppress unused variable warning because `assert` does not.
 	assert(count == 1);
 }
 
