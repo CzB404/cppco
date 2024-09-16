@@ -39,6 +39,7 @@
 #include <functional>
 #ifdef CPPCO_LIBCO_INTEROP
 #include <map>
+#include <set>
 #include <mutex>
 #endif // CPPCO_LIBCO_INTEROP
 

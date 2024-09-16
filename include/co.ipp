@@ -16,6 +16,7 @@
 #define CO_IPP_INCLUDE_GUARD
 
 #include <cassert>
+#include <utility>
 
 namespace co {
 
