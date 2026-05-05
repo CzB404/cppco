@@ -34,7 +34,9 @@ if (${CMAKE_VERSION} VERSION_GREATER_EQUAL 3.19)
 	add_library(cppco INTERFACE ${CPPCO_HDRS})
 else (${CMAKE_VERSION} VERSION_GREATER_EQUAL 3.19)
 	add_library(cppco INTERFACE)
-	target_sources(cppco INTERFACE ${CPPCO_HDRS})
+	# Temporary fix for CMake configure failure before version 3.19
+	# This line was originally used to force the display of the header files in IDEs like Visual Studio.
+	# target_sources(cppco INTERFACE ${CPPCO_HDRS})
 endif (${CMAKE_VERSION} VERSION_GREATER_EQUAL 3.19)
 source_group(TREE ${CMAKE_CURRENT_LIST_DIR} PREFIX "Header Files" FILES ${CPPCO_HDRS})
 set_source_files_properties(${CPPCO_HDRS} PROPERTIES HEADER_FILE_ONLY ON)
